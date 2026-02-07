@@ -12,6 +12,9 @@ on:
   schedule:
     - cron: '0 0 * * 0'  #weekly on Sunday
 
+permissions:
+  contents: write  #allow workflow to commit and push
+
 jobs:
   generate-rules:
     name: Generate Sigma Rules from CTI
