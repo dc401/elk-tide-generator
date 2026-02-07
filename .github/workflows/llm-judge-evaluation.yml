@@ -30,14 +30,15 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Download Integration Test Results
-        if: github.event_name == 'workflow_run'
-        uses: actions/download-artifact@v4
-        with:
-          name: integration-test-results
-          path: generated/
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check for Integration Test Results
+        run: |
+          if [ ! -f "generated/INTEGRATION_TEST_RESULTS.json" ]; then
+            echo "ERROR: Integration test results not found"
+            echo "Please run integration tests first or commit the results file"
+            exit 1
+          fi
+          echo "Found integration test results"
+          ls -lh generated/INTEGRATION_TEST_RESULTS.json
 
       - name: Run LLM Judge Evaluation
         env:
