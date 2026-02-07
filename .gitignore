@@ -30,6 +30,10 @@ staged_rules/pending_pr_*/
 *.swo
 .DS_Store
 
+#backup files
+*.bak
+*~
+
 #logs
 *.log
 logs/
