@@ -96,7 +96,7 @@ jobs:
           GOOGLE_GENAI_USE_VERTEXAI: true
         run: |
           pip install -r requirements.txt
-          python run_agent.py --cti-folder sigma_detection_agent/cti_src
+          python run_agent.py --cti-folder cti_src
 ```
 
 ## How It Works

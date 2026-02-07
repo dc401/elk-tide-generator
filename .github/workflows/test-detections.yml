@@ -2,12 +2,14 @@ name: Test Detection Rules
 on:
   pull_request:
     paths:
+      - 'cti_src/**'
       - 'generated/sigma_rules/**'
       - 'generated/tests/**'
       - 'scripts/**'
   push:
     branches: [main]
     paths:
+      - 'cti_src/**'
       - 'generated/sigma_rules/**'
       - 'generated/tests/**'
   workflow_dispatch:

@@ -142,7 +142,7 @@ GOOGLE_GENAI_USE_VERTEXAI=true
 python run_agent.py --test-cti
 
 #expected output:
-# Loading CTI files from: sigma_detection_agent/cti_src
+# Loading CTI files from: cti_src
 # Loaded 1 CTI files (~XXX tokens)
 # ✓ CTI loading successful!
 # Phase 1 (Foundation) validation: PASSED
@@ -287,12 +287,12 @@ pip install -r requirements.txt --force-reinstall
 
 1. **Add your CTI files:**
    ```bash
-   cp your-threat-intel.pdf sigma_detection_agent/cti_src/
+   cp your-threat-intel.pdf cti_src/
    ```
 
 2. **Review sample CTI:**
    ```bash
-   cat sigma_detection_agent/cti_src/sample-gcp-threats.md
+   cat cti_src/sample-gcp-threats.md
    ```
 
 3. **Proceed to Phase 2:**

@@ -313,7 +313,7 @@ python scripts/integration_test_mock.py
 
 **Ready to add:**
 1. **AWS CloudTrail:**
-   - Add AWS threat intel to `sigma_detection_agent/cti_src/`
+   - Add AWS threat intel to `cti_src/`
    - Run agent with AWS CTI
    - Generate AWS-specific test payloads
    - Test with same CI/CD pipeline

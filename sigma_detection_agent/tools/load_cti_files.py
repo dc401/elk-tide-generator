@@ -156,7 +156,7 @@ def summarize_file_chunked(file_path: Path, file_type: str, file_bytes: bytes) -
     except Exception as e:
         return f"\n[ERROR summarizing {file_path.name}: {str(e)}]\n"
 
-def load_cti_files(folder_path: str = 'sigma_detection_agent/cti_src') -> dict:
+def load_cti_files(folder_path: str = 'cti_src') -> dict:
     """
     load and parse CTI files with intelligent chunking.
     stays within 400k token budget for CTI content.

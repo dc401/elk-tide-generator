@@ -308,7 +308,7 @@ source venv/bin/activate
 python run_agent.py --test-cti
 
 #expected output:
-# Loading CTI files from: sigma_detection_agent/cti_src
+# Loading CTI files from: cti_src
 # Loaded 1 CTI files (~XXX tokens)
 # ✓ CTI loading successful!
 # Phase 1 (Foundation) validation: PASSED
@@ -322,7 +322,7 @@ Place your threat intelligence files in the CTI source folder:
 
 ```bash
 #create sample CTI file
-cat > sigma_detection_agent/cti_src/sample-threat.md << 'EOF'
+cat > cti_src/sample-threat.md << 'EOF'
 # GCP IAM Privilege Escalation Campaign
 
 ## Threat Actor
@@ -384,7 +384,7 @@ print('Schemas imported successfully')
 #test CTI loader
 python -c "
 from sigma_detection_agent.tools import load_cti_files
-result = load_cti_files('sigma_detection_agent/cti_src')
+result = load_cti_files('cti_src')
 print(f'Loaded {result[\"files_loaded\"]} files')
 "
 ```
@@ -400,12 +400,14 @@ python scripts/integration_test_elk.py
 
 ```
 .
+├── cti_src/                        #CTI input files (user places here)
+│   ├── *.pdf, *.txt, *.md, *.docx  #threat intelligence sources
+│
 ├── sigma_detection_agent/          #main agent package
 │   ├── agent.py                    #root agent + workflows
 │   ├── prompts/                    #external prompt files
 │   ├── schemas/                    #pydantic models
-│   ├── tools/                      #custom tools
-│   └── cti_src/                    #CTI input files (user places here)
+│   └── tools/                      #custom tools
 │
 ├── generated/                      #agent output (draft rules)
 │   ├── sigma_rules/                #generated sigma YAML
@@ -489,12 +491,12 @@ gcloud projects get-iam-policy $GOOGLE_CLOUD_PROJECT \
 
 ### "CTI folder not found"
 
-**Cause:** No CTI files in `sigma_detection_agent/cti_src/`
+**Cause:** No CTI files in `cti_src/`
 
 **Fix:**
 ```bash
 #place CTI files in correct location
-ls sigma_detection_agent/cti_src/
+ls cti_src/
 
 #supported formats: .txt, .md, .pdf, .docx
 ```

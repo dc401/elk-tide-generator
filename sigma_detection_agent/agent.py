@@ -316,7 +316,7 @@ root_agent = SequentialAgent(
 #================================
 
 async def run_sigma_detection_agent(
-    cti_folder: str = "sigma_detection_agent/cti_src",
+    cti_folder: str = "cti_src",
     output_dir: str = "generated",
     max_retries: int = 3
 ):
@@ -425,7 +425,7 @@ Output directory: {output_dir}
 async def main():
     """test entry point"""
     result = await run_sigma_detection_agent(
-        cti_folder="sigma_detection_agent/cti_src",
+        cti_folder="cti_src",
         output_dir="generated"
     )
 
