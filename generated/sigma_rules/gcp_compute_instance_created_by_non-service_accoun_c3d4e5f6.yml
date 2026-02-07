@@ -1,0 +1,54 @@
+title: GCP Compute Instance Created By Non-Service Account
+id: c3d4e5f6-a7b8-4f9a-8b1c-2d3e4f5a6b7c
+status: experimental
+description: Detects the creation of a Compute Engine instance by a principal that
+  is not a service account. In automated environments, infrastructure is typically
+  provisioned by IaC tools using service accounts. Manual creation by a user can indicate
+  resource hijacking (T1496) for purposes like cryptomining.
+references:
+- https://attack.mitre.org/techniques/T1496/
+- https://cloud.google.com/compute/docs/reference/rest/v1/instances/insert
+author: Automated Detection Agent
+date: '2024-07-31'
+modified: '2024-07-31'
+tags:
+- attack.impact
+- attack.t1496
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    protoPayload.serviceName: compute.googleapis.com
+    protoPayload.methodName: v1.compute.instances.insert
+    protoPayload.status.code: 0
+  filter_legitimate:
+    protoPayload.authenticationInfo.principalEmail|endswith: .gserviceaccount.com
+  condition: selection and not filter_legitimate
+falsepositives:
+- Engineers or developers manually creating VMs for testing or debugging in development
+  projects.
+- Administrators creating a one-off instance for a specific purpose.
+level: medium
+fields:
+- protoPayload.authenticationInfo.principalEmail
+- protoPayload.resourceName
+- resource.labels.project_id
+- protoPayload.request.machineType
+- protoPayload.request.disks.initializeParams.sourceImage
+- timestamp
+test_scenarios:
+  true_positive: An attacker with compromised user credentials manually creates 100
+    small compute instances to use for a botnet or cryptomining.
+  false_negative: An attacker compromises a CI/CD service account (e.g., from Terraform
+    Cloud) and uses it to provision malicious instances, which would be filtered by
+    this rule.
+  false_positive: A developer logs into the GCP console and creates a new VM in their
+    sandbox project to test a new application.
+  true_negative: A Terraform pipeline, running with a service account, creates a new
+    set of web server instances as part of a blue/green deployment.
+  log_source_schema: https://cloud.google.com/logging/docs/audit#audit_log_entry_structure
+  example_log_fields:
+    protoPayload.methodName: v1.compute.instances.insert
+    protoPayload.authenticationInfo.principalEmail: compromised-user@example.com
+    protoPayload.request.machineType: n1-standard-1

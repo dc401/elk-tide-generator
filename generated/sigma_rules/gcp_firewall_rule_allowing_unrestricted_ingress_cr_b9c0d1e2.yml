@@ -1,0 +1,57 @@
+title: GCP Firewall Rule Allowing Unrestricted Ingress Created
+id: b9c0d1e2-f3a4-4e5f-8a6b-7c8d9e0f1a2b
+status: experimental
+description: Detects the creation or modification of a GCP Firewall Rule that allows
+  inbound traffic from any source (IPv4 '0.0.0.0/0' or IPv6 '::/0'). Attackers use
+  this (T1562.007) to open ports for C2 communication or to expose internal services.
+references:
+- https://attack.mitre.org/techniques/T1562/007/
+- https://cloud.google.com/vpc/docs/firewalls
+author: Automated Detection Agent
+date: '2024-07-31'
+modified: '2024-07-31'
+tags:
+- attack.defense_evasion
+- attack.t1562.007
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    protoPayload.serviceName: compute.googleapis.com
+    protoPayload.methodName|startswith: v1.compute.firewalls.
+    protoPayload.request.sourceRanges:
+    - 0.0.0.0/0
+    - ::/0
+    protoPayload.status.code: 0
+  filter_legitimate:
+    protoPayload.request.allowed.IPProtocol: tcp
+    protoPayload.request.allowed.ports:
+    - '80'
+    - '443'
+  condition: selection and not filter_legitimate
+falsepositives:
+- Legitimate creation of firewall rules to expose public web servers (HTTP/HTTPS)
+  to the internet.
+level: high
+fields:
+- protoPayload.authenticationInfo.principalEmail
+- protoPayload.resourceName
+- protoPayload.request.allowed.IPProtocol
+- protoPayload.request.allowed.ports
+- resource.labels.project_id
+- timestamp
+test_scenarios:
+  true_positive: An attacker creates a new firewall rule named 'allow-rdp' that permits
+    TCP traffic on port 3389 from '0.0.0.0/0'.
+  false_negative: An attacker creates a rule allowing traffic from a very wide, but
+    not universal, CIDR range like '0.0.0.0/1'.
+  false_positive: A network administrator creates a firewall rule to allow HTTPS (port
+    443) traffic from '0.0.0.0/0' to a new set of web servers.
+  true_negative: An administrator creates a firewall rule to allow traffic between
+    two internal subnets.
+  log_source_schema: https://cloud.google.com/logging/docs/audit#audit_log_entry_structure
+  example_log_fields:
+    protoPayload.methodName: v1.compute.firewalls.insert
+    protoPayload.request.sourceRanges: 0.0.0.0/0
+    protoPayload.request.allowed.ports: '3389'

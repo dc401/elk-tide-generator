@@ -1,0 +1,40 @@
+{
+  "insertId": "764b10e3-cead-48f2-9725-039acbfa8fd2",
+  "logName": "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
+  "protoPayload": {
+    "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+    "status": {
+      "code": 0
+    },
+    "authenticationInfo": {
+      "principalEmail": "attacker-sa@project.iam.gserviceaccount.com"
+    },
+    "requestMetadata": {
+      "callerIp": "203.0.113.10",
+      "callerSuppliedUserAgent": "gcloud/1.0"
+    },
+    "serviceName": "compute.googleapis.com",
+    "methodName": "v1.compute.instances.setMetadata",
+    "authorizationInfo": [],
+    "request": {
+      "metadata": {
+        "items": {
+          "key": "windows-keys"
+        }
+      }
+    },
+    "response": {}
+  },
+  "resource": {
+    "type": "unknown"
+  },
+  "timestamp": "2026-02-07T21:56:31.885214+00:00",
+  "severity": "NOTICE",
+  "labels": {},
+  "operation": {},
+  "receiveTimestamp": "2026-02-07T21:56:31.885217+00:00",
+  "_scenario": "false_positive",
+  "_description": "A help desk technician follows a standard procedure to reset a user's password on their Windows workstation VM.",
+  "_expected_detection": false,
+  "_note": "Legitimate activity - should NOT trigger alert"
+}

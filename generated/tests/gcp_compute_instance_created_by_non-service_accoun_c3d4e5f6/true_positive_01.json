@@ -1,0 +1,35 @@
+{
+  "insertId": "b2f8aff4-f982-404a-90ff-3481ce649696",
+  "logName": "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
+  "protoPayload": {
+    "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+    "status": {
+      "code": 0
+    },
+    "authenticationInfo": {
+      "principalEmail": "compromised-user@example.com"
+    },
+    "requestMetadata": {
+      "callerIp": "203.0.113.10",
+      "callerSuppliedUserAgent": "gcloud/1.0"
+    },
+    "serviceName": "compute.googleapis.com",
+    "methodName": "v1.compute.instances.insert",
+    "authorizationInfo": [],
+    "request": {
+      "machineType": "n1-standard-1"
+    },
+    "response": {}
+  },
+  "resource": {
+    "type": "unknown"
+  },
+  "timestamp": "2026-02-07T21:56:31.858742+00:00",
+  "severity": "NOTICE",
+  "labels": {},
+  "operation": {},
+  "receiveTimestamp": "2026-02-07T21:56:31.858744+00:00",
+  "_scenario": "true_positive",
+  "_description": "An attacker with compromised user credentials manually creates 100 small compute instances to use for a botnet or cryptomining.",
+  "_expected_detection": true
+}

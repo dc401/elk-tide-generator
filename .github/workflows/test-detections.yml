@@ -1,0 +1,211 @@
+name: Test Detection Rules
+on:
+  pull_request:
+    paths:
+      - 'generated/sigma_rules/**'
+      - 'generated/tests/**'
+      - 'scripts/**'
+  push:
+    branches: [main]
+    paths:
+      - 'generated/sigma_rules/**'
+      - 'generated/tests/**'
+  workflow_dispatch:
+
+jobs:
+  unit-test:
+    name: Unit Test Sigma Rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          pip install pysigma pysigma-backend-elasticsearch pyyaml
+
+      - name: Unit Test Sigma Rules
+        run: |
+          python scripts/unit_test_sigma.py generated/sigma_rules/
+
+      - name: Validate Elasticsearch Queries
+        run: |
+          python scripts/validate_elasticsearch_queries.py generated/sigma_rules/
+
+      - name: Validate Test Payloads
+        run: |
+          python scripts/validate_test_payloads.py generated/tests/
+
+  integration-test:
+    name: Integration Test with Elasticsearch
+    runs-on: ubuntu-latest
+    needs: unit-test
+    services:
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: false
+          ES_JAVA_OPTS: -Xms256m -Xmx256m
+          bootstrap.memory_lock: false
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "curl -f http://localhost:9200/_cluster/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          pip install elasticsearch pysigma pysigma-backend-elasticsearch pyyaml
+
+      - name: Wait for Elasticsearch
+        run: |
+          timeout 120 bash -c 'until curl -s http://localhost:9200/_cluster/health | grep -q "green\|yellow"; do echo "Waiting for ES..."; sleep 5; done'
+          curl -s http://localhost:9200/_cluster/health
+
+      - name: Run Integration Tests
+        run: |
+          python scripts/integration_test_ci.py \
+            --rules generated/sigma_rules \
+            --tests generated/tests \
+            --es-url http://localhost:9200
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: generated/INTEGRATION_TEST_RESULTS.json
+          retention-days: 30
+
+      - name: Comment PR with Results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            if (!fs.existsSync('generated/INTEGRATION_TEST_RESULTS.json')) {
+              console.log('No test results file found');
+              return;
+            }
+
+            const results = JSON.parse(fs.readFileSync('generated/INTEGRATION_TEST_RESULTS.json', 'utf8'));
+
+            let totalRules = Object.keys(results).length;
+            let totalTP = 0, totalFP = 0, totalTN = 0, totalFN = 0;
+            let perfectRules = 0;
+
+            for (const [ruleId, metrics] of Object.entries(results)) {
+              totalTP += metrics.tp;
+              totalFP += metrics.fp;
+              totalTN += metrics.tn;
+              totalFN += metrics.fn;
+              if (metrics.f1_score >= 0.90) perfectRules++;
+            }
+
+            const avgPrecision = totalTP / (totalTP + totalFP) || 0;
+            const avgRecall = totalTP / (totalTP + totalFN) || 0;
+            const avgF1 = totalTP + totalFP > 0 ? 2 * (avgPrecision * avgRecall) / (avgPrecision + avgRecall) : 0;
+
+            const comment = `## Integration Test Results
+
+            **Overall Metrics:**
+            - Rules Tested: ${totalRules}
+            - High-Quality Rules (F1 ≥ 0.90): ${perfectRules} (${(perfectRules/totalRules*100).toFixed(1)}%)
+
+            **Detection Performance:**
+            - True Positives: ${totalTP}
+            - False Positives: ${totalFP}
+            - True Negatives: ${totalTN}
+            - False Negatives: ${totalFN}
+
+            **Quality Metrics:**
+            - Precision: ${avgPrecision.toFixed(2)}
+            - Recall: ${avgRecall.toFixed(2)}
+            - F1 Score: ${avgF1.toFixed(2)}
+
+            ${avgF1 >= 0.75 ? '✅ **Quality PASS** - Meets deployment thresholds' : '⚠️ **Quality CONDITIONAL** - Review needed before deployment'}
+
+            <details>
+            <summary>Per-Rule Results</summary>
+
+            | Rule | Level | TP | FP | TN | FN | Precision | Recall | F1 |
+            |------|-------|----|----|----|----|-----------|--------|------|
+            ${Object.entries(results).map(([id, m]) =>
+              `| ${m.rule_title.substring(0, 40)} | ${m.rule_level} | ${m.tp} | ${m.fp} | ${m.tn} | ${m.fn} | ${m.precision.toFixed(2)} | ${m.recall.toFixed(2)} | ${m.f1_score.toFixed(2)} |`
+            ).join('\n')}
+
+            </details>
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  quality-gate:
+    name: Quality Gate Check
+    runs-on: ubuntu-latest
+    needs: integration-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Test Results
+        uses: actions/download-artifact@v4
+        with:
+          name: integration-test-results
+          path: generated/
+
+      - name: Check Quality Thresholds
+        run: |
+          python3 << 'EOF'
+          import json
+          import sys
+
+          with open('generated/INTEGRATION_TEST_RESULTS.json') as f:
+              results = json.load(f)
+
+          total_tp = sum(r['tp'] for r in results.values())
+          total_fp = sum(r['fp'] for r in results.values())
+          total_tn = sum(r['tn'] for r in results.values())
+          total_fn = sum(r['fn'] for r in results.values())
+
+          precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0
+          recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0
+          f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+
+          print(f"Overall Quality Metrics:")
+          print(f"  Precision: {precision:.2f}")
+          print(f"  Recall: {recall:.2f}")
+          print(f"  F1 Score: {f1:.2f}")
+          print()
+
+          if f1 >= 0.75:
+              print("✅ PASS: Quality metrics meet deployment thresholds")
+              sys.exit(0)
+          elif f1 >= 0.60:
+              print("⚠️  CONDITIONAL: Quality acceptable but needs review")
+              sys.exit(0)
+          else:
+              print("❌ FAIL: Quality below acceptable thresholds")
+              sys.exit(1)
+          EOF

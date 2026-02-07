@@ -1,0 +1,39 @@
+{
+  "insertId": "a0b2eba7-0ced-40f4-a859-a205b34b53c8",
+  "logName": "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
+  "protoPayload": {
+    "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+    "status": {
+      "code": 0
+    },
+    "authenticationInfo": {
+      "principalEmail": "attacker@evil.com"
+    },
+    "requestMetadata": {
+      "callerIp": "203.0.113.10",
+      "callerSuppliedUserAgent": "gcloud/1.0"
+    },
+    "serviceName": "compute.googleapis.com",
+    "methodName": "v1.compute.projects.setCommonInstanceMetadata",
+    "authorizationInfo": [],
+    "request": {
+      "metadata": {
+        "items": {
+          "key": "ssh-keys"
+        }
+      }
+    },
+    "response": {}
+  },
+  "resource": {
+    "type": "unknown"
+  },
+  "timestamp": "2026-02-07T21:56:31.882108+00:00",
+  "severity": "NOTICE",
+  "labels": {},
+  "operation": {},
+  "receiveTimestamp": "2026-02-07T21:56:31.882110+00:00",
+  "_scenario": "true_positive",
+  "_description": "An attacker uses a compromised account to call 'compute.projects.setCommonInstanceMetadata' and inject their public SSH key into the 'ssh-keys' value for all VMs in the project.",
+  "_expected_detection": true
+}

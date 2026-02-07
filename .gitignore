@@ -1,0 +1,54 @@
+#python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+adk-tide-generator/
+*.egg-info/
+dist/
+build/
+
+#environment
+.env
+.env.local
+
+#session results (may contain sensitive data)
+session_results/*.json
+
+#generated files (keep in repo but ignore temp files)
+generated/**/*.tmp
+staged_rules/pending_pr_*/
+
+#IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+#logs
+*.log
+logs/
+
+#docker volumes
+docker/data/
+
+#pytest cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+#bootstrap state (contains sensitive info)
+.bootstrap-state
+
+#service account keys (never commit these!)
+*sa-key*.json
+*service-account*.json
+*service_account*.json
+credentials.json
+key.json
+session_results/

@@ -1,0 +1,40 @@
+{
+  "insertId": "3b8bff21-90d6-4c4b-91df-52c6d6c57e74",
+  "logName": "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
+  "protoPayload": {
+    "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+    "status": {
+      "code": 0
+    },
+    "authenticationInfo": {
+      "principalEmail": "attacker-sa@project.iam.gserviceaccount.com"
+    },
+    "requestMetadata": {
+      "callerIp": "203.0.113.10",
+      "callerSuppliedUserAgent": "gcloud/1.0"
+    },
+    "serviceName": "compute.googleapis.com",
+    "methodName": "v1.compute.instances.setMetadata",
+    "authorizationInfo": [],
+    "request": {
+      "metadata": {
+        "items": {
+          "key": "windows-keys"
+        }
+      }
+    },
+    "response": {}
+  },
+  "resource": {
+    "type": "unknown"
+  },
+  "timestamp": "2026-02-07T21:56:31.884946+00:00",
+  "severity": "NOTICE",
+  "labels": {},
+  "operation": {},
+  "receiveTimestamp": "2026-02-07T21:56:31.884949+00:00",
+  "_scenario": "false_negative",
+  "_description": "An attacker uses a startup script to reset a local user password on a Linux VM, which would not involve the 'windows-keys' metadata key.",
+  "_expected_detection": false,
+  "_note": "Evasion technique - should NOT trigger alert but is malicious"
+}

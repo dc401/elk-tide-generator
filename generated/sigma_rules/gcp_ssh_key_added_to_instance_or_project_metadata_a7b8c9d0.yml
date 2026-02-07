@@ -1,0 +1,58 @@
+title: GCP SSH Key Added to Instance or Project Metadata
+id: a7b8c9d0-e1f2-4d3e-8f4a-5b6c7d8e9f0a
+status: experimental
+description: Detects when SSH keys are added to the metadata of a Compute Engine instance
+  or an entire project. Attackers use this (T1098.004) to create a persistent SSH
+  backdoor, bypassing firewalls and other access controls.
+references:
+- https://attack.mitre.org/techniques/T1098/004/
+- https://cloud.google.com/compute/docs/instances/managing-instance-access
+author: Automated Detection Agent
+date: '2024-07-31'
+modified: '2024-07-31'
+tags:
+- attack.persistence
+- attack.t1098.004
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    protoPayload.serviceName: compute.googleapis.com
+    protoPayload.methodName:
+    - v1.compute.instances.setMetadata
+    - v1.compute.projects.setCommonInstanceMetadata
+    - beta.compute.projects.setCommonInstanceMetadata
+    protoPayload.request.metadata.items.key:
+    - ssh-keys
+    - sshKeys
+    protoPayload.status.code: 0
+  filter_legitimate:
+    protoPayload.authenticationInfo.principalEmail: google-oslogin@google.com
+  condition: selection and not filter_legitimate
+falsepositives:
+- Administrators legitimately adding SSH keys for new developers or for their own
+  access.
+- Automated onboarding scripts that add user SSH keys to projects.
+- The OS Login service managing SSH keys, which may use a dedicated service account.
+level: high
+fields:
+- protoPayload.authenticationInfo.principalEmail
+- protoPayload.resourceName
+- protoPayload.methodName
+- resource.labels.project_id
+- timestamp
+test_scenarios:
+  true_positive: An attacker uses a compromised account to call 'compute.projects.setCommonInstanceMetadata'
+    and inject their public SSH key into the 'ssh-keys' value for all VMs in the project.
+  false_negative: An attacker gains OS-level access and adds their key directly to
+    the '~/.ssh/authorized_keys' file on the instance, bypassing the GCP metadata
+    API.
+  false_positive: An engineering manager adds a new team member's public SSH key to
+    a project's metadata to grant them access.
+  true_negative: A user modifies the 'startup-script' metadata key.
+  log_source_schema: https://cloud.google.com/logging/docs/audit#audit_log_entry_structure
+  example_log_fields:
+    protoPayload.methodName: v1.compute.projects.setCommonInstanceMetadata
+    protoPayload.request.metadata.items.key: ssh-keys
+    protoPayload.authenticationInfo.principalEmail: attacker@evil.com

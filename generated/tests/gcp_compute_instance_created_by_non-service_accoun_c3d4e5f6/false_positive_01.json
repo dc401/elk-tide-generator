@@ -1,0 +1,36 @@
+{
+  "insertId": "61fa3dea-9779-42aa-9a5f-5fd65fad3c9b",
+  "logName": "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
+  "protoPayload": {
+    "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+    "status": {
+      "code": 0
+    },
+    "authenticationInfo": {
+      "principalEmail": ".gserviceaccount.com"
+    },
+    "requestMetadata": {
+      "callerIp": "203.0.113.10",
+      "callerSuppliedUserAgent": "gcloud/1.0"
+    },
+    "serviceName": "compute.googleapis.com",
+    "methodName": "v1.compute.instances.insert",
+    "authorizationInfo": [],
+    "request": {
+      "machineType": "n1-standard-1"
+    },
+    "response": {}
+  },
+  "resource": {
+    "type": "unknown"
+  },
+  "timestamp": "2026-02-07T21:56:31.859269+00:00",
+  "severity": "NOTICE",
+  "labels": {},
+  "operation": {},
+  "receiveTimestamp": "2026-02-07T21:56:31.859273+00:00",
+  "_scenario": "false_positive",
+  "_description": "A developer logs into the GCP console and creates a new VM in their sandbox project to test a new application.",
+  "_expected_detection": false,
+  "_note": "Legitimate activity - should NOT trigger alert"
+}

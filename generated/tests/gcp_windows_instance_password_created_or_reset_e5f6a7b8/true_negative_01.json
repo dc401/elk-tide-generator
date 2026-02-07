@@ -1,0 +1,40 @@
+{
+  "insertId": "baa54f6e-012a-4d9d-b8eb-6a228b72c788",
+  "logName": "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
+  "protoPayload": {
+    "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+    "status": {
+      "code": 0
+    },
+    "authenticationInfo": {
+      "principalEmail": "user@example.com"
+    },
+    "requestMetadata": {
+      "callerIp": "203.0.113.10",
+      "callerSuppliedUserAgent": "gcloud/1.0"
+    },
+    "serviceName": "normal_value",
+    "methodName": "NormalOperation",
+    "authorizationInfo": [],
+    "request": {
+      "metadata": {
+        "items": {
+          "key": "normal_value"
+        }
+      }
+    },
+    "response": {}
+  },
+  "resource": {
+    "type": "unknown"
+  },
+  "timestamp": "2026-02-07T21:56:31.885418+00:00",
+  "severity": "NOTICE",
+  "labels": {},
+  "operation": {},
+  "receiveTimestamp": "2026-02-07T21:56:31.885420+00:00",
+  "_scenario": "true_negative",
+  "_description": "An administrator reboots a Windows VM using the `v1.compute.instances.stop` and `v1.compute.instances.start` API calls.",
+  "_expected_detection": false,
+  "_note": "Normal activity - should NOT trigger alert"
+}

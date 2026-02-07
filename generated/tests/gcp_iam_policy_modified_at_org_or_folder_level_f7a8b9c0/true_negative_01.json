@@ -1,0 +1,34 @@
+{
+  "insertId": "0ab51c6b-f16b-42fd-aaa5-979c441f96f6",
+  "logName": "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
+  "protoPayload": {
+    "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+    "status": {
+      "code": 0
+    },
+    "authenticationInfo": {
+      "principalEmail": "user@example.com"
+    },
+    "requestMetadata": {
+      "callerIp": "203.0.113.10",
+      "callerSuppliedUserAgent": "gcloud/1.0"
+    },
+    "serviceName": "normal_value",
+    "methodName": "NormalOperation",
+    "authorizationInfo": [],
+    "request": {},
+    "response": {}
+  },
+  "resource": {
+    "type": "normal_value"
+  },
+  "timestamp": "2026-02-07T21:56:31.870217+00:00",
+  "severity": "NOTICE",
+  "labels": {},
+  "operation": {},
+  "receiveTimestamp": "2026-02-07T21:56:31.870219+00:00",
+  "_scenario": "true_negative",
+  "_description": "A project administrator grants a developer 'roles/viewer' on a single project.",
+  "_expected_detection": false,
+  "_note": "Normal activity - should NOT trigger alert"
+}

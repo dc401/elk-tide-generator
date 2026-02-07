@@ -1,0 +1,40 @@
+{
+  "insertId": "196f4ec0-4b8e-47d0-a49d-387e06d671cb",
+  "logName": "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
+  "protoPayload": {
+    "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+    "status": {
+      "code": 0
+    },
+    "authenticationInfo": {
+      "principalEmail": "google-oslogin@google.com"
+    },
+    "requestMetadata": {
+      "callerIp": "203.0.113.10",
+      "callerSuppliedUserAgent": "gcloud/1.0"
+    },
+    "serviceName": "compute.googleapis.com",
+    "methodName": "v1.compute.projects.setCommonInstanceMetadata",
+    "authorizationInfo": [],
+    "request": {
+      "metadata": {
+        "items": {
+          "key": "ssh-keys"
+        }
+      }
+    },
+    "response": {}
+  },
+  "resource": {
+    "type": "unknown"
+  },
+  "timestamp": "2026-02-07T21:56:31.882498+00:00",
+  "severity": "NOTICE",
+  "labels": {},
+  "operation": {},
+  "receiveTimestamp": "2026-02-07T21:56:31.882500+00:00",
+  "_scenario": "false_positive",
+  "_description": "An engineering manager adds a new team member's public SSH key to a project's metadata to grant them access.",
+  "_expected_detection": false,
+  "_note": "Legitimate activity - should NOT trigger alert"
+}

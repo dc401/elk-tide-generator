@@ -1,0 +1,34 @@
+{
+  "insertId": "aebe0b93-0aed-40c8-9563-4f6d0f3ace1a",
+  "logName": "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
+  "protoPayload": {
+    "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+    "status": {
+      "code": 0
+    },
+    "authenticationInfo": {
+      "principalEmail": "@cloudservices.gserviceaccount.com"
+    },
+    "requestMetadata": {
+      "callerIp": "203.0.113.10",
+      "callerSuppliedUserAgent": "gcloud/1.0"
+    },
+    "serviceName": "iam.googleapis.com",
+    "methodName": "google.iam.admin.v1.ListServiceAccounts",
+    "authorizationInfo": [],
+    "request": {},
+    "response": {}
+  },
+  "resource": {
+    "type": "unknown"
+  },
+  "timestamp": "2026-02-07T21:56:31.877289+00:00",
+  "severity": "NOTICE",
+  "labels": {},
+  "operation": {},
+  "receiveTimestamp": "2026-02-07T21:56:31.877291+00:00",
+  "_scenario": "false_positive",
+  "_description": "A developer lists the service accounts in their project to find the correct one for an application.",
+  "_expected_detection": false,
+  "_note": "Legitimate activity - should NOT trigger alert"
+}

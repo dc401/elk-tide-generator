@@ -1,0 +1,36 @@
+{
+  "insertId": "d340a252-8300-40fe-ae37-e5b91a5a6e39",
+  "logName": "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
+  "protoPayload": {
+    "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+    "status": {
+      "code": 0
+    },
+    "authenticationInfo": {
+      "principalEmail": "-compute@developer.gserviceaccount.com"
+    },
+    "requestMetadata": {
+      "callerIp": "203.0.113.10",
+      "callerSuppliedUserAgent": "gcloud/1.0"
+    },
+    "serviceName": "iam.googleapis.com",
+    "methodName": "google.iam.admin.v1.CreateServiceAccount",
+    "authorizationInfo": [],
+    "request": {
+      "accountId": "backdoor-sa"
+    },
+    "response": {}
+  },
+  "resource": {
+    "type": "unknown"
+  },
+  "timestamp": "2026-02-07T21:56:31.874764+00:00",
+  "severity": "NOTICE",
+  "labels": {},
+  "operation": {},
+  "receiveTimestamp": "2026-02-07T21:56:31.874765+00:00",
+  "_scenario": "false_positive",
+  "_description": "Terraform runs and creates a new service account for a new application as defined in its configuration files.",
+  "_expected_detection": false,
+  "_note": "Legitimate activity - should NOT trigger alert"
+}

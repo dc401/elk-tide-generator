@@ -1,0 +1,57 @@
+title: GCP IAM Policy Changed to Grant Highly Privileged Role
+id: d1e2f3a4-b5c6-4d7e-8f9b-0c1d2e3f4a5b
+status: experimental
+description: Detects when a GCP IAM policy is modified to grant a highly permissive
+  role (e.g., Owner, Editor, Service Account Token Creator) to a principal. This action
+  provides broad access and is a critical privilege escalation technique (T1098).
+references:
+- https://attack.mitre.org/techniques/T1098/
+- https://cloud.google.com/iam/docs/understanding-roles
+author: Automated Detection Agent
+date: '2024-07-31'
+modified: '2024-07-31'
+tags:
+- attack.privilege_escalation
+- attack.t1098
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    protoPayload.serviceName: cloudresourcemanager.googleapis.com
+    protoPayload.methodName: SetIamPolicy
+    protoPayload.request.policy.bindings.role:
+    - roles/owner
+    - roles/editor
+    - roles/iam.serviceAccountTokenCreator
+    protoPayload.status.code: 0
+  filter_legitimate:
+    protoPayload.authenticationInfo.principalEmail:
+    - org-admin@company.com
+    - terraform-prod@project.iam.gserviceaccount.com
+  condition: selection and not filter_legitimate
+falsepositives:
+- Initial project setup by authorized organization administrators or infrastructure-as-code
+  (IaC) service accounts.
+- Approved break-glass procedures for emergency project access.
+level: critical
+fields:
+- protoPayload.authenticationInfo.principalEmail
+- protoPayload.request.policy.bindings.members
+- protoPayload.request.policy.bindings.role
+- resource.labels.project_id
+- timestamp
+test_scenarios:
+  true_positive: A compromised developer account with 'resourcemanager.projects.setIamPolicy'
+    permission adds an external attacker account with the 'roles/owner' role on the
+    project.
+  false_negative: An attacker grants a custom role with permissions equivalent to
+    'owner' (e.g., '*') instead of one of the specified predefined roles.
+  false_positive: An authorized Terraform service account assigns a project owner
+    during the automated creation of a new GCP project.
+  true_negative: An administrator grants a user the 'roles/viewer' role on a project.
+  log_source_schema: https://cloud.google.com/logging/docs/audit#audit_log_entry_structure
+  example_log_fields:
+    protoPayload.methodName: SetIamPolicy
+    protoPayload.request.policy.bindings.role: roles/owner
+    protoPayload.authenticationInfo.principalEmail: compromised-user@example.com

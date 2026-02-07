@@ -1,0 +1,33 @@
+{
+  "insertId": "699459ea-8e3c-4646-843b-87864eeff3f6",
+  "logName": "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
+  "protoPayload": {
+    "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+    "status": {
+      "code": 0
+    },
+    "authenticationInfo": {
+      "principalEmail": "attacker@evil.com"
+    },
+    "requestMetadata": {
+      "callerIp": "203.0.113.10",
+      "callerSuppliedUserAgent": "gcloud/1.0"
+    },
+    "serviceName": "cloudresourcemanager.googleapis.com",
+    "methodName": "GetIamPolicy",
+    "authorizationInfo": [],
+    "request": {},
+    "response": {}
+  },
+  "resource": {
+    "type": "unknown"
+  },
+  "timestamp": "2026-02-07T21:56:31.871997+00:00",
+  "severity": "NOTICE",
+  "labels": {},
+  "operation": {},
+  "receiveTimestamp": "2026-02-07T21:56:31.872001+00:00",
+  "_scenario": "true_positive",
+  "_description": "An attacker runs `gcloud projects get-iam-policy <project-id>` after gaining initial access to understand who has what permissions.",
+  "_expected_detection": true
+}

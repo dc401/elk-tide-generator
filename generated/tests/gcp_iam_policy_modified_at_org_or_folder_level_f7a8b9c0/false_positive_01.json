@@ -1,0 +1,34 @@
+{
+  "insertId": "d3a1b6d7-7932-4cb6-8991-a086bee6036d",
+  "logName": "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
+  "protoPayload": {
+    "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+    "status": {
+      "code": 0
+    },
+    "authenticationInfo": {
+      "principalEmail": "org-admin-group@example.com"
+    },
+    "requestMetadata": {
+      "callerIp": "203.0.113.10",
+      "callerSuppliedUserAgent": "gcloud/1.0"
+    },
+    "serviceName": "cloudresourcemanager.googleapis.com",
+    "methodName": "SetIamPolicy",
+    "authorizationInfo": [],
+    "request": {},
+    "response": {}
+  },
+  "resource": {
+    "type": "folder"
+  },
+  "timestamp": "2026-02-07T21:56:31.870051+00:00",
+  "severity": "NOTICE",
+  "labels": {},
+  "operation": {},
+  "receiveTimestamp": "2026-02-07T21:56:31.870052+00:00",
+  "_scenario": "false_positive",
+  "_description": "A central security team, using an approved service account, applies a new custom role binding to all projects by setting the IAM policy at the organization level.",
+  "_expected_detection": false,
+  "_note": "Legitimate activity - should NOT trigger alert"
+}

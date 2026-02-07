@@ -1,0 +1,39 @@
+{
+  "insertId": "9fc3235a-e902-4555-9246-b8c2f36af948",
+  "logName": "projects/test-project/logs/cloudaudit.googleapis.com%2Factivity",
+  "protoPayload": {
+    "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+    "status": {
+      "code": 0
+    },
+    "authenticationInfo": {
+      "principalEmail": "compromised-user@example.com"
+    },
+    "requestMetadata": {
+      "callerIp": "203.0.113.10",
+      "callerSuppliedUserAgent": "gcloud/1.0"
+    },
+    "serviceName": "cloudresourcemanager.googleapis.com",
+    "methodName": "SetIamPolicy",
+    "authorizationInfo": [],
+    "request": {
+      "policy": {
+        "bindings": {
+          "role": "roles/owner"
+        }
+      }
+    },
+    "response": {}
+  },
+  "resource": {
+    "type": "unknown"
+  },
+  "timestamp": "2026-02-07T21:56:31.866865+00:00",
+  "severity": "NOTICE",
+  "labels": {},
+  "operation": {},
+  "receiveTimestamp": "2026-02-07T21:56:31.866868+00:00",
+  "_scenario": "true_positive",
+  "_description": "A compromised developer account with 'resourcemanager.projects.setIamPolicy' permission adds an external attacker account with the 'roles/owner' role on the project.",
+  "_expected_detection": true
+}
