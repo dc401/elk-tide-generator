@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-02-08T14:05:12.186966",
+  "timestamp": "2026-02-08T14:27:24.358291",
   "total_rules": 7,
   "successful_conversions": 7,
-  "approved_queries": 1,
-  "rejected_queries": 6,
+  "approved_queries": 4,
+  "rejected_queries": 3,
   "validations": [
     {
       "valid": false,
@@ -12,29 +12,44 @@
       "issues": [
         "Failed to parse LLM validation response"
       ],
-      "error": "Unterminated string starting at: line 18 column 5 (char 1598)",
+      "error": "Unterminated string starting at: line 16 column 5 (char 1113)",
       "rule_id": "c1a7b8d9-0f1e-4d2c-8a3b-4e5f6a7b8c9d",
       "rule_title": "Akira Ransomware: Ransom Note Creation"
     },
     {
-      "valid": false,
-      "overall_score": 0.0,
-      "decision": "REJECT",
-      "issues": [
-        "Failed to parse LLM validation response"
+      "valid": true,
+      "syntax_score": 1.0,
+      "field_mapping_score": 1.0,
+      "logic_accuracy_score": 1.0,
+      "performance_score": 0.9,
+      "overall_score": 0.97,
+      "issues": [],
+      "warnings": [],
+      "recommendations": [
+        "For optimal performance and to avoid query string parsing overhead, convert the 'query_string' to a 'bool' query with 'must' clauses for each condition. See the 'bool' query example below.",
+        "{\n  \"query\": {\n    \"bool\": {\n      \"must\": [\n        { \"term\": { \"event.code\": \"11\" } },\n        { \"term\": { \"file.name\": \"akira_readme.txt\" } }\n      ]\n    }\n  }\n}"
       ],
-      "error": "Unterminated string starting at: line 13 column 5 (char 370)",
+      "decision": "APPROVE",
       "rule_id": "f5a2b1c3-6d9e-4a7b-8b1c-9d8e7f6a5b4c",
       "rule_title": "Akira Ransom Note Creation"
     },
     {
-      "valid": false,
-      "overall_score": 0.0,
-      "decision": "REJECT",
+      "valid": true,
+      "syntax_score": 1.0,
+      "field_mapping_score": 1.0,
+      "logic_accuracy_score": 1.0,
+      "performance_score": 0.3,
+      "overall_score": 0.83,
       "issues": [
-        "Failed to parse LLM validation response"
+        "The query uses leading wildcards for all 'contains' operations (e.g., `*.akira*`, `*explorer.exe*`). Leading wildcards are a significant performance anti-pattern because they prevent Elasticsearch from efficiently using the index and force a full scan of all terms for the specified fields, which can be extremely slow on large datasets. [5, 7]"
       ],
-      "error": "Unterminated string starting at: line 19 column 5 (char 1436)",
+      "warnings": [
+        "The query relies on the `query_string` type, which is powerful but has a strict syntax and can be brittle. [1, 8, 14] If user-provided values were ever to be inserted into this query, it would create a risk of syntax injection. A native `bool` query is generally safer and more structured. [6, 13]"
+      ],
+      "recommendations": [
+        "For better structure, safety, and clarity, this query should be rewritten using the native Elasticsearch `bool` query DSL. The `contains` logic can be implemented with individual `wildcard` clauses within the `bool` structure. While this refactoring improves query structure, it does not resolve the underlying performance issue of leading wildcards. For a true performance gain on 'contains' searches, the recommended practice is to configure an n-gram tokenizer on the relevant fields at index time."
+      ],
+      "decision": "APPROVE",
       "rule_id": "e8d9c0a1-7b6c-4f5d-8a4b-3c2d1e0f9a8b",
       "rule_title": "Akira File Encryption Extension Detected"
     },
@@ -45,7 +60,7 @@
       "issues": [
         "Failed to parse LLM validation response"
       ],
-      "error": "Unterminated string starting at: line 17 column 5 (char 1670)",
+      "error": "Unterminated string starting at: line 21 column 5 (char 1961)",
       "rule_id": "f8a0b3c1-1e9d-4c5b-9a8f-2e3d7a6b4c10",
       "rule_title": "Akira Ransomware Note Creation"
     },
@@ -53,51 +68,63 @@
       "valid": true,
       "syntax_score": 1.0,
       "field_mapping_score": 1.0,
-      "logic_accuracy_score": 1.0,
-      "performance_score": 0.3,
-      "overall_score": 0.72,
+      "logic_accuracy_score": 0.85,
+      "performance_score": 0.4,
+      "overall_score": 0.81,
       "issues": [
-        "The query relies on the `query_string` type, which is less performant and precise than a native `bool` query.",
-        "The query uses leading wildcards (e.g., `*delete shadows*`) on multiple fields. This is a significant performance anti-pattern as it prevents the search engine from using the inverted index efficiently and results in slow, resource-intensive queries. [4, 13]"
+        "The query uses a `query_string` with leading wildcards (e.g., `*delete\\ shadows*`). Leading wildcards are known to cause significant performance issues as they require scanning all terms in the index for the specified fields. [1, 8, 18]",
+        "The use of `query_string` is generally less performant than a structured `bool` query. For production environments, converting this to a `bool` query with more specific clauses (`match`, `wildcard`, `term`) is highly recommended. [7, 20]"
       ],
       "warnings": [
-        "The case sensitivity of the `query_string` depends on the underlying index mapping for the fields. If fields like `process.command_line` are not analyzed as `text`, the wildcard matches may be case-sensitive and could miss variations."
+        "The filter condition for `C:\\Windows\\System32\\svchost.exe` is missing leading and trailing wildcards. The original Sigma rule uses the `|contains` modifier, which implies the value can appear anywhere in the field. [15] This query will only exclude events where `process.parent.executable` is an exact match to that string, making the filter less effective than intended."
       ],
       "recommendations": [
-        "The query should be rewritten using the Elasticsearch `bool` query structure. This provides better performance, readability, and control.",
-        "Replace the wildcard-based `contains` logic with `match_phrase` queries for the `process.command_line` field. For the parent process executables, use `term` or `match` queries on a `.keyword` field if an exact match is sufficient, or `wildcard` queries as a last resort.",
-        "The overall structure should be a `bool` query with a `must` clause for the 'selection' criteria and a `must_not` clause for the 'filter_legitimate' criteria."
+        "To improve performance, rewrite this logic using the `bool` query construct. The `selection` criteria can be a `must` clause containing a `bool`/`should` for `process.name` and another for `process.command_line`. The `filter_legitimate` logic should be in a `must_not` clause.",
+        "For the `process.command_line` and `process.parent.executable` fields, use `wildcard` queries on a `.keyword` sub-field if available (e.g., `process.command_line.keyword`) as this is more efficient than wildcard searches on analyzed text fields.",
+        "Correct the logic for the `svchost.exe` filter by adding wildcards to match the Sigma `|contains` modifier, like so: `*C\\:\\\\Windows\\\\System32\\\\svchost.exe*`."
       ],
-      "decision": "REJECT",
+      "decision": "APPROVE",
       "rule_id": "e2f7b1d4-8c8a-4d7a-8f6a-0d9c44b1b3e1",
       "rule_title": "Akira Ransomware Inhibit System Recovery via Command"
     },
     {
-      "valid": false,
-      "overall_score": 0.0,
-      "decision": "REJECT",
+      "valid": true,
+      "syntax_score": 1.0,
+      "field_mapping_score": 0.6,
+      "logic_accuracy_score": 0.8,
+      "performance_score": 0.2,
+      "overall_score": 0.58,
       "issues": [
-        "Failed to parse LLM validation response"
+        "Critical performance issue: The query relies heavily on leading wildcards for both `TargetFilename` and `Image` fields. Queries with leading wildcards (`*value`) cannot use the index efficiently and must scan a large number of terms, which can lead to slow query performance and increased cluster load. [5, 6, 15]",
+        "The query uses `query_string`, which is generally less performant and more brittle than a structured `bool` query. [2, 3, 16] A `bool` query with specific `wildcard` clauses is the recommended approach for this logic. [18]"
       ],
-      "error": "Unterminated string starting at: line 21 column 5 (char 1757)",
+      "warnings": [
+        "The field names `TargetFilename` and `Image` assume a flat log structure. In standardized schemas like the Elastic Common Schema (ECS), these fields are typically nested (e.g., `process.executable` for `Image`, or `file.path` / `winlog.event_data.TargetFilename` for `TargetFilename`). [11, 22] This query will fail on ECS-compliant data without modification.",
+        "Using a wildcard to simulate an `endswith` condition (e.g., `*\\explorer.exe`) is not a perfect match for the logic. It could incorrectly match a path like `C:\\fakeprocess.exe\\some.log` if the field was analyzed and tokenized in unexpected ways."
+      ],
+      "recommendations": [
+        "Rewrite the query using a `bool` query with a `must` clause for the selection and a `must_not` clause containing a `bool`/`should` for the filters. This provides a more robust and explicit structure. [18]",
+        "Replace the `query_string` with specific `wildcard` queries on `.keyword` fields (e.g., `{ \"wildcard\": { \"process.executable.keyword\": \"*\\\\explorer.exe\" } }`). This avoids the parsing overhead and potential syntax errors of `query_string`. [7]",
+        "Verify the actual field names in the target Elasticsearch index mapping and update the query accordingly, using ECS fields (e.g., `process.executable`, `file.path`) where possible for broader compatibility. [19, 20]",
+        "For a long-term performance improvement, consider mapping the fields used for `endswith` searches with a `reverse` analyzer at index time. This allows `endswith` searches to be performed without using inefficient leading wildcards."
+      ],
+      "decision": "REJECT",
       "rule_id": "d4e6f1a8-3b9c-4d5e-9f0a-1b2c3d4e5f6a",
       "rule_title": "Akira Ransomware: File Encryption Activity"
     },
     {
       "valid": true,
-      "syntax_score": 1.0,
-      "field_mapping_score": 1.0,
-      "logic_accuracy_score": 0.5,
-      "performance_score": 0.7,
-      "overall_score": 0.84,
-      "issues": [
-        "The 'query_string' query uses a text analyzer by default, which is not ideal for matching an exact filename. [8] The standard analyzer may tokenize the value 'akira_readme.txt' into 'akira_readme' and 'txt', which would fail to match the literal string. This can lead to missed detections if the analysis process breaks the filename in an unexpected way. [4]"
-      ],
+      "syntax_score": 1,
+      "field_mapping_score": 1,
+      "logic_accuracy_score": 0.7,
+      "performance_score": 0.9,
+      "overall_score": 0.9,
+      "issues": [],
       "warnings": [
-        "For exact, case-sensitive matching, a `term` query on a `keyword` field is significantly more performant and reliable than a `query_string` query. [2, 6] The `query_string` query incurs overhead from parsing and analysis that is unnecessary for this type of exact match. [10]"
+        "The `query_string` query's behavior is dependent on the underlying field mapping. If `file.name` is an analyzed `text` field, this query could result in false positives by matching tokens within the filename (e.g., 'akira_readme' or 'txt') instead of the exact name. [5, 9]"
       ],
       "recommendations": [
-        "To ensure an exact match and improve performance, the query should be rewritten to use the `term` query on the `.keyword` subfield of `file.name`. The recommended Elasticsearch DSL query is: `{\"query\": {\"term\": {\"file.name.keyword\": \"akira_readme.txt\"}}}`. This change guarantees that the query looks for the precise filename without any tokenization."
+        "For a more precise and performant query that guarantees an exact match, replace the `query_string` with a `term` query. Assuming a standard Elastic Common Schema (ECS) mapping, the recommended query is `{\"query\": {\"term\": {\"file.name.keyword\": \"akira_readme.txt\"}}}`. If `file.name` is directly mapped as a `keyword` field, use `{\"query\": {\"term\": {\"file.name\": \"akira_readme.txt\"}}}`. [1, 3]"
       ],
       "decision": "APPROVE",
       "rule_id": "f0e1d2c3-b4a5-46c7-88d9-e0f1a2b3c4d5",
