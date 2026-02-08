@@ -129,13 +129,13 @@ def ingest_test_payloads(es: Elasticsearch, tests_dir: Path) -> Dict:
             field_sample = list(log_entry.keys())[:5] if isinstance(log_entry, dict) else []
             print(f"    • {payload_file.stem}: fields={field_sample}")
 
-            #ingest to elasticsearch
-            es.index(index=index_name, id=doc_id, document=payload)
+            #ingest ONLY log_entry to elasticsearch (not wrapper)
+            es.index(index=index_name, id=doc_id, document=log_entry)
 
             payload_map[rule_dir.name].append({
                 'id': doc_id,
-                'scenario': payload.get('_scenario'),
-                'expected': payload.get('_expected_detection')
+                'scenario': payload.get('payload_type'),
+                'expected': payload.get('expected_alert')
             })
 
             total_ingested += 1
