@@ -165,8 +165,9 @@ async def run_detection_agent(cti_dir: Path, output_dir: Path, project_id: str, 
     
     #step 1: load CTI files
     print("[1/5] Loading CTI files...")
-    cti_content = load_cti_files(cti_dir, client)
-    print(f"  ✓ Loaded {len(cti_content)} CTI files")
+    cti_result = load_cti_files(str(cti_dir))
+    cti_content = cti_result['text_content']
+    print(f"  ✓ Loaded {cti_result['files_loaded']} CTI files")
     
     #step 2: security scan
     print("\n[2/5] Security scan (OWASP LLM protection)...")
