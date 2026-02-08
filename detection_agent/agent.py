@@ -56,13 +56,11 @@ MODELS = {
         'name': 'gemini-2.5-flash',
         'retry_config': FLASH_RETRY_CONFIG,
         'default_temp': 0.3,
-        'default_thinking': 6000,
     },
     'pro': {
         'name': 'gemini-2.5-pro',
         'retry_config': AGGRESSIVE_RETRY_CONFIG,
         'default_temp': 0.2,
-        'default_thinking': 8000,
     }
 }
 
@@ -87,29 +85,23 @@ def safe_json_parse(text: str) -> Dict:
         raise
 
 
-async def generate_with_retry(client, model_config: Dict, prompt: str, 
+async def generate_with_retry(client, model_config: Dict, prompt: str,
                               system_instruction: str = None,
                               tools: list = None,
                               temperature: float = None,
-                              thinking_budget: int = None,
                               max_retries: int = 3) -> str:
     """generate content with exponential backoff retry"""
-    
+
     model_name = model_config['name']
     retry_config = model_config['retry_config']
     temp = temperature if temperature is not None else model_config['default_temp']
-    thinking = thinking_budget if thinking_budget is not None else model_config['default_thinking']
-    
+
     config = types.GenerateContentConfig(
         temperature=temp,
         response_mime_type='application/json',
-        system_instruction=system_instruction,
-        thinking_config=types.ThinkingConfig(
-            mode=types.ThinkingMode.THINKING_MODE_ENABLED,
-            budget_tokens=thinking
-        )
+        system_instruction=system_instruction
     )
-    
+
     if tools:
         config.tools = tools
     
@@ -177,8 +169,7 @@ async def run_detection_agent(cti_dir: Path, output_dir: Path, project_id: str, 
         client,
         MODELS['flash'],
         security_scan_prompt,
-        temperature=0.3,
-        thinking_budget=3000
+        temperature=0.3
     )
     
     security_result = SecurityScanResult(**safe_json_parse(security_response))
@@ -204,7 +195,6 @@ async def run_detection_agent(cti_dir: Path, output_dir: Path, project_id: str, 
         MODELS['flash'],
         generation_prompt,
         temperature=0.3,
-        thinking_budget=6000,
         tools=[types.Tool(google_search=types.GoogleSearch())]
     )
     
@@ -233,7 +223,6 @@ async def run_detection_agent(cti_dir: Path, output_dir: Path, project_id: str, 
             MODELS['pro'],
             validation_prompt,
             temperature=0.2,
-            thinking_budget=8000,
             tools=[types.Tool(google_search=types.GoogleSearch())]
         )
         
