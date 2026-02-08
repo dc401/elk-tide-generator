@@ -257,6 +257,8 @@ def main():
     for rule_file in rule_files:
         print(f"  Converting: {rule_file.name}")
         conversion = convert_sigma_to_elk(rule_file)
+        if not conversion.get('success'):
+            print(f"    ✗ Conversion failed: {conversion.get('error')}")
         conversions.append(conversion)
 
     successful_conversions = [c for c in conversions if c.get('success')]
