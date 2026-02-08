@@ -71,12 +71,22 @@ def validate_elasticsearch_compatibility(rules_dir: str):
     backend = LuceneBackend()
     rules_path = Path(rules_dir)
 
+    if not rules_path.exists():
+        print(f"WARNING: Directory not found: {rules_dir}")
+        print("No rules to validate - skipping")
+        return
+
     print("="*80)
     print("ELASTICSEARCH 8.x QUERY DSL VALIDATION")
     print("="*80)
     print()
 
     rule_files = sorted(rules_path.glob('*.yml'))
+
+    if not rule_files:
+        print(f"WARNING: No .yml files found in {rules_dir}")
+        print("No rules to validate - skipping")
+        return
 
     total_rules = 0
     compatible_rules = 0

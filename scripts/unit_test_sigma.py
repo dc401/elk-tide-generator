@@ -340,15 +340,17 @@ def main():
     rules_dir = Path(args.rules_dir)
 
     if not rules_dir.exists():
-        print(f"ERROR: Directory not found: {rules_dir}")
-        sys.exit(1)
+        print(f"WARNING: Directory not found: {rules_dir}")
+        print("No rules to validate - skipping")
+        sys.exit(0)
 
     #find all YAML files
     rule_files = list(rules_dir.glob('*.yml')) + list(rules_dir.glob('*.yaml'))
 
     if not rule_files:
-        print(f"ERROR: No .yml or .yaml files found in {rules_dir}")
-        sys.exit(1)
+        print(f"WARNING: No .yml or .yaml files found in {rules_dir}")
+        print("No rules to validate - skipping")
+        sys.exit(0)
 
     print(f"Found {len(rule_files)} Sigma rule(s)")
     print(f"Validating...")

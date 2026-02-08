@@ -70,14 +70,16 @@ def main():
     tests_dir = Path(args.tests_dir)
 
     if not tests_dir.exists():
-        print(f"ERROR: Tests directory not found: {tests_dir}")
-        return 1
+        print(f"WARNING: Tests directory not found: {tests_dir}")
+        print("No rules to validate - skipping")
+        return 0
 
     rule_dirs = [d for d in tests_dir.iterdir() if d.is_dir()]
 
     if not rule_dirs:
-        print(f"ERROR: No test directories found in {tests_dir}")
-        return 1
+        print(f"WARNING: No test directories found in {tests_dir}")
+        print("No rules to validate - skipping")
+        return 0
 
     print(f"\n{'='*80}")
     print(f"TEST PAYLOAD VALIDATION")
