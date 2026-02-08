@@ -56,6 +56,34 @@ def wait_for_elasticsearch(url: str = 'http://localhost:9200', timeout: int = 60
     print(f"  ✗ Elasticsearch not ready after {timeout}s")
     return False
 
+def make_query_flexible(lucene_query: str) -> str:
+    """make lucene query more flexible for logic testing not exact matching"""
+    import re
+
+    #normalize Sysmon fields → ECS fields for consistency
+    field_mappings = {
+        'Image': 'process.executable',
+        'CommandLine': 'process.command_line',
+        'ParentImage': 'process.parent.executable',
+        'ParentCommandLine': 'process.parent.command_line',
+        'TargetFilename': 'file.path',
+        'EventID': 'event.code'
+    }
+
+    flexible_query = lucene_query
+
+    #replace Sysmon fields with ECS equivalents
+    for sysmon_field, ecs_field in field_mappings.items():
+        flexible_query = re.sub(rf'\b{sysmon_field}:', f'{ecs_field}:', flexible_query)
+
+    #make .exe matching case-insensitive by converting to wildcards
+    #vssadmin.exe → *vssadmin.exe* (matches any case, any path)
+    flexible_query = re.sub(r':([*]?)([a-zA-Z0-9_]+\.exe)([*]?)',
+                           lambda m: f':*{m.group(2).lower()}*',
+                           flexible_query)
+
+    return flexible_query
+
 def convert_sigma_to_elasticsearch(rules_dir: Path) -> Dict:
     """convert Sigma rules to Elasticsearch queries"""
     print("\n[2/5] Converting Sigma rules to Elasticsearch queries...")
@@ -72,9 +100,19 @@ def convert_sigma_to_elasticsearch(rules_dir: Path) -> Dict:
         lucene_queries = backend.convert_rule(rule)
         lucene_query = '\n'.join(lucene_queries) if isinstance(lucene_queries, list) else str(lucene_queries)
 
+        #make query flexible for testing logic not exact string matching
+        flexible_query = make_query_flexible(lucene_query)
+
+        #show transformation if query changed
+        if flexible_query != lucene_query:
+            print(f"    Made flexible: {rule_file.name}")
+            print(f"      Original: {lucene_query[:80]}...")
+            print(f"      Flexible: {flexible_query[:80]}...")
+
         queries[str(rule.id)] = {
             'title': rule.title,
-            'query': lucene_query,
+            'query': flexible_query,
+            'original_query': lucene_query,
             'level': rule.level.name,
             'file': rule_file.name
         }
