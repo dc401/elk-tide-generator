@@ -142,41 +142,7 @@ jobs:
           #filter tests to match passing rules only
           if [ -f "generated/PASSING_RULE_IDS.json" ]; then
             echo "Filtering test payloads for passing rules..."
-
-            python3 << 'EOF'
-import json
-import shutil
-from pathlib import Path
-
-#load passing rule IDs
-with open('generated/PASSING_RULE_IDS.json') as f:
-    data = json.load(f)
-    passing_ids = set(data['rule_ids'])
-
-#filter test directories
-tests_dir = Path('generated/tests')
-tests_backup = Path('generated/tests_backup')
-
-if tests_dir.exists():
-    tests_backup.mkdir(exist_ok=True)
-
-    #move all tests to backup
-    for item in tests_dir.iterdir():
-        if item.is_dir():
-            shutil.move(str(item), str(tests_backup / item.name))
-
-    #restore only tests for passing rules
-    for rule_id in passing_ids:
-        rule_prefix = rule_id[:8]
-
-        #find matching test directory
-        for test_dir in tests_backup.iterdir():
-            if rule_prefix in test_dir.name:
-                shutil.move(str(test_dir), str(tests_dir / test_dir.name))
-                break
-
-print("✓ Filtered test payloads")
-EOF
+            python3 scripts/filter_test_payloads.py
           fi
 
       - name: Commit Passing Rules
@@ -198,13 +164,7 @@ EOF
             PASSING_COUNT="${{ steps.filter.outputs.passing_count }}"
             TEST_COUNT=$(find generated/tests -name "*.json" 2>/dev/null | wc -l)
 
-            git commit -m "ci: $PASSING_COUNT rules passed static LLM judge (from CTI)
-
-Quality threshold: 0.65
-Test payloads: $TEST_COUNT
-Ready for integration testing with real ELK
-
-[skip ci]"
+            git commit -m "ci: $PASSING_COUNT rules passed static LLM judge (threshold 0.65) [skip ci]"
             git push
           fi
 

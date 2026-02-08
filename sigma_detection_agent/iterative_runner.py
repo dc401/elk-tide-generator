@@ -1,8 +1,27 @@
 """
 Iterative agent runner with self-refinement and progress tracking
 
-Each agent iterates 2-3 times on its own output before moving to next stage.
-Progress bars show status in CI/CD environments.
+**How this works:**
+1. agent.py defines the agents (models, prompts, schemas, workflows)
+2. This file (iterative_runner.py) imports those agents and runs them with:
+   - Iterative refinement (2-3 passes per agent)
+   - Manual context management (truncate outputs between stages)
+   - Progress tracking for CI/CD
+
+**Context Management:**
+We use MANUAL pruning instead of ADK's EventsCompactionConfig because:
+- Explicit control over truncation per-stage (30K-60K chars tuned per workflow)
+- No extra LLM calls (EventsCompactionConfig uses LLM to summarize)
+- Sequential pipeline (not conversational), so manual truncation is simpler
+
+**Agent Flow:**
+agent.py defines →  iterative_runner.py imports and executes with iterations
+                    ↓
+                    run_agent_with_iteration() runs each agent 2-3 times
+                    ↓
+                    truncate_for_refinement() limits context between iterations
+                    ↓
+                    prune_state_for_storage() limits final session JSON size
 """
 
 import asyncio
@@ -20,15 +39,16 @@ from rich.table import Table
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
+#Import agents defined in agent.py (see agent.py for model configs, prompts, schemas)
 from sigma_detection_agent.agent import (
-    cti_analyzer_agent,
-    ttp_mapper_agent,
-    sigma_generator_agent,
-    sigma_formatter_agent,
-    payload_generator_agent,
-    payload_formatter_agent,
-    test_validator_agent,
-    load_cti_files
+    cti_analyzer_agent,        #Analyzes CTI files, extracts threats/TTPs
+    ttp_mapper_agent,           #Maps TTPs to MITRE ATT&CK
+    sigma_generator_agent,      #Generates Sigma detection rules
+    sigma_formatter_agent,      #Validates/formats Sigma YAML
+    payload_generator_agent,    #Generates TP/FN/FP/TN test payloads
+    payload_formatter_agent,    #Formats test payloads as JSON
+    test_validator_agent,       #Validates test payload schemas
+    load_cti_files              #Tool to load CTI files (PDF/MD/TXT/DOCX)
 )
 
 console = Console()

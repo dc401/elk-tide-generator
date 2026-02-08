@@ -1,7 +1,35 @@
 """
-sigma detection agent - main orchestration
+sigma detection agent - agent definitions (blueprint)
 
-converts CTI → Sigma detection rules → validated detections
+**Architecture:**
+This file DEFINES the agents - their models, prompts, schemas, and workflows.
+The iterative_runner.py file EXECUTES these agents with iterative refinement.
+
+**What's defined here:**
+1. Individual Agents (analyzer, mapper, generator, formatter, validator)
+   - Model selection (Pro vs Flash vs Flash-8B)
+   - Prompts (loaded from prompts/ directory)
+   - Output schemas (Pydantic models for type safety)
+   - Tools (load_cti_files, etc.)
+
+2. Grouped Workflows (Sequential agents combining multiple agents)
+   - cti_analysis_workflow: analyzer → mapper
+   - sigma_generation_workflow: generator → formatter
+   - test_generation_workflow: payload_gen → formatter → validator
+
+3. Configuration
+   - Retry configs (AGGRESSIVE_RETRY_CONFIG for Pro, FLASH_RETRY_CONFIG for Flash)
+   - Safety settings (allow security research content)
+   - Environment setup (Vertex AI, project ID, location)
+
+**How iterative_runner.py uses this:**
+iterative_runner.py imports these agents and runs them with:
+- Multiple iterations per agent (2-3 passes for self-refinement)
+- Manual context truncation between iterations
+- Progress tracking for CI/CD
+
+**Flow:**
+agent.py (this file) → defines agents → iterative_runner.py imports → executes with iterations
 """
 
 import os
@@ -62,6 +90,14 @@ FLASH_RETRY_CONFIG = types.HttpOptions(
 
 #inter-agent delay to prevent quota bursting
 INTER_AGENT_DELAY = 3.0  #3 seconds between agents
+
+#safety settings for security research content
+SAFETY_SETTINGS = [
+    types.SafetySetting(
+        category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        threshold=types.HarmBlockThreshold.BLOCK_HIGH_AND_ABOVE
+    )
+]
 
 #================================
 # Helper Functions
@@ -146,7 +182,10 @@ cti_analyzer_agent = Agent(
     name='cti_analyzer',
     instruction=CTI_ANALYZER_PROMPT,
     output_schema=CTIAnalysisOutput,
-    generate_content_config=GenerateContentConfig(http_options=AGGRESSIVE_RETRY_CONFIG)
+    generate_content_config=GenerateContentConfig(
+        http_options=AGGRESSIVE_RETRY_CONFIG,
+        safety_settings=SAFETY_SETTINGS
+    )
 )
 
 ttp_mapper_agent = Agent(
@@ -154,7 +193,10 @@ ttp_mapper_agent = Agent(
     name='ttp_mapper',
     instruction=TTP_MAPPER_PROMPT,
     output_schema=TTPMappingOutput,
-    generate_content_config=GenerateContentConfig(http_options=AGGRESSIVE_RETRY_CONFIG)
+    generate_content_config=GenerateContentConfig(
+        http_options=AGGRESSIVE_RETRY_CONFIG,
+        safety_settings=SAFETY_SETTINGS
+    )
 )
 
 # ------ Sigma Generation Workflow Agents ------
@@ -164,7 +206,10 @@ sigma_generator_agent = Agent(
     name='sigma_generator',
     instruction=SIGMA_GENERATOR_PROMPT,
     output_schema=SigmaRuleOutput,
-    generate_content_config=GenerateContentConfig(http_options=AGGRESSIVE_RETRY_CONFIG)
+    generate_content_config=GenerateContentConfig(
+        http_options=AGGRESSIVE_RETRY_CONFIG,
+        safety_settings=SAFETY_SETTINGS
+    )
 )
 
 sigma_formatter_agent = Agent(
@@ -172,7 +217,10 @@ sigma_formatter_agent = Agent(
     name='sigma_formatter',
     instruction=SIGMA_FORMATTER_PROMPT,
     output_schema=SigmaRuleOutput,
-    generate_content_config=GenerateContentConfig(http_options=FLASH_RETRY_CONFIG)
+    generate_content_config=GenerateContentConfig(
+        http_options=FLASH_RETRY_CONFIG,
+        safety_settings=SAFETY_SETTINGS
+    )
 )
 
 # ------ Test Generation Workflow Agents ------
@@ -192,7 +240,10 @@ payload_generator_agent = Agent(
     Output as TestPayloadSet schema.
     """,
     output_schema=TestPayloadSet,
-    generate_content_config=GenerateContentConfig(http_options=AGGRESSIVE_RETRY_CONFIG)
+    generate_content_config=GenerateContentConfig(
+        http_options=AGGRESSIVE_RETRY_CONFIG,
+        safety_settings=SAFETY_SETTINGS
+    )
 )
 
 payload_formatter_agent = Agent(
@@ -207,7 +258,10 @@ payload_formatter_agent = Agent(
     Output as TestPayloadSet schema.
     """,
     output_schema=TestPayloadSet,
-    generate_content_config=GenerateContentConfig(http_options=FLASH_RETRY_CONFIG)
+    generate_content_config=GenerateContentConfig(
+        http_options=FLASH_RETRY_CONFIG,
+        safety_settings=SAFETY_SETTINGS
+    )
 )
 
 test_validator_agent = Agent(
@@ -222,7 +276,10 @@ test_validator_agent = Agent(
     Output as TestValidationOutput schema.
     """,
     output_schema=TestValidationOutput,
-    generate_content_config=GenerateContentConfig(http_options=FLASH_RETRY_CONFIG)
+    generate_content_config=GenerateContentConfig(
+        http_options=FLASH_RETRY_CONFIG,
+        safety_settings=SAFETY_SETTINGS
+    )
 )
 
 # ------ Deployment Workflow Agents ------
@@ -236,7 +293,10 @@ cicd_generator_agent = Agent(
     Generate GitHub Actions workflow YAML for detection testing and deployment.
     Include unit tests, integration tests, and deployment steps.
     """,
-    generate_content_config=GenerateContentConfig(http_options=FLASH_RETRY_CONFIG)
+    generate_content_config=GenerateContentConfig(
+        http_options=FLASH_RETRY_CONFIG,
+        safety_settings=SAFETY_SETTINGS
+    )
 )
 
 llm_judge_agent = Agent(
@@ -257,7 +317,10 @@ llm_judge_agent = Agent(
     Output as DetectionQualityReport schema.
     """,
     output_schema=DetectionQualityReport,
-    generate_content_config=GenerateContentConfig(http_options=AGGRESSIVE_RETRY_CONFIG)
+    generate_content_config=GenerateContentConfig(
+        http_options=AGGRESSIVE_RETRY_CONFIG,
+        safety_settings=SAFETY_SETTINGS
+    )
 )
 
 #================================
