@@ -127,7 +127,7 @@ Rule title: {rule_title}
 """
 
     response = client.models.generate_content(
-        model='gemini-2.0-flash-exp',
+        model='gemini-2.5-flash',
         contents=identify_prompt,
         config=types.GenerateContentConfig(
             temperature=0.3,  #moderate for log source identification
@@ -151,7 +151,7 @@ Rule title: {rule_title}
         print(f"    Searching: {query}")
 
         search_response = client.models.generate_content(
-            model='gemini-2.0-flash-exp',
+            model='gemini-2.5-flash',
             contents=f"Search and summarize: {query}",
             config=types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())],
@@ -214,7 +214,7 @@ Generate a field mapping from {identification['log_source']} to Elastic Common S
 """
 
     mapping_response = client.models.generate_content(
-        model='gemini-2.0-flash-exp',
+        model='gemini-2.5-flash',
         contents=mapping_prompt,
         config=types.GenerateContentConfig(
             temperature=0.2,  #lower temp for precise field mappings
