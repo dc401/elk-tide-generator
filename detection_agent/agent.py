@@ -8,6 +8,7 @@ import json
 import os
 import random
 import sys
+import yaml
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any
@@ -253,15 +254,15 @@ async def run_detection_agent(cti_dir: Path, output_dir: Path, project_id: str, 
     for rule in validated_rules:
         #sanitize filename: remove invalid chars
         safe_name = rule.name.lower().replace(' ', '_').replace('/', '_').replace('\\', '_')
-        rule_file = rules_dir / f"{safe_name}.json"
+        rule_file = rules_dir / f"{safe_name}.yml"
         with open(rule_file, 'w') as f:
-            json.dump(rule.model_dump(), f, indent=2)
+            yaml.dump(rule.model_dump(), f, default_flow_style=False, sort_keys=False)
         print(f"  ✓ Saved: {rule_file.name}")
 
     #save CTI context
-    context_file = output_dir / 'cti_context.json'
+    context_file = output_dir / 'cti_context.yml'
     with open(context_file, 'w') as f:
-        json.dump(rule_output.cti_context, f, indent=2)
+        yaml.dump(rule_output.cti_context, f, default_flow_style=False, sort_keys=False)
     
     print(f"\n{'='*80}")
     print(f"GENERATION COMPLETE")
