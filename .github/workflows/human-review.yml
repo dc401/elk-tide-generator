@@ -224,9 +224,7 @@ jobs:
             --base main \
             --head "${{ steps.branch.outputs.branch_name }}" \
             --title "Detection Rules Review - $(date +%Y-%m-%d)" \
-            --body "$PR_BODY" \
-            --label "detection-review" \
-            --label "needs-human-approval"
+            --body "$PR_BODY"
 
           echo "✅ Pull request created for human review"
 
