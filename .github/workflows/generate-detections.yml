@@ -9,6 +9,8 @@ on:
     branches: [main]
     paths:
       - 'cti_src/**'  #trigger when CTI files change
+      - 'detection_agent/**'  #trigger on agent code changes
+      - 'run_agent.py'  #trigger on main script changes
 
 permissions:
   contents: write  #allow workflow to commit and push
