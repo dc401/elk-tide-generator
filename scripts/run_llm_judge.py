@@ -381,8 +381,8 @@ def main():
 
     vertexai.init(project=project_id, location=args.location)
 
-    #use Gemini Pro for evaluation
-    model = GenerativeModel('gemini-1.5-pro')
+    #use Gemini 2.5 Pro for evaluation
+    model = GenerativeModel('gemini-2.5-pro')
 
     print(f"\n{'='*80}")
     print("LLM JUDGE: DETECTION RULE QUALITY EVALUATION")

@@ -274,7 +274,7 @@ def main():
     print(f"Using Vertex AI: {project_id} ({args.location})")
     vertexai.init(project=project_id, location=args.location)
 
-    model = GenerativeModel('gemini-1.5-pro')
+    model = GenerativeModel('gemini-2.5-pro')
 
     print(f"\n{'='*80}")
     print("STATIC LLM JUDGE: PRE-FILTER EVALUATION")
