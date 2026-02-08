@@ -33,6 +33,7 @@ staged_rules/pending_pr_*/
 #backup files
 *.bak
 *~
+*.old
 
 #logs
 *.log

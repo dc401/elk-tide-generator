@@ -1,6 +1,0 @@
-prereqs=done
-gcp_project=xtec-project
-environment=development
-sa_key_file=/tmp/sigma-sa-key-36142.json
-sa_email=sigma-detection-agent@xtec-project.iam.gserviceaccount.com
-gcp_setup=done
