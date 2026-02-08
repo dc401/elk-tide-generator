@@ -24,9 +24,30 @@
 - 4 Akira Ransomware detection rules in generated/detection_rules/
 - CTI context saved to generated/cti_context.json
 
+## Completed ✅ (Continued)
+
+### YAML Migration (Complete)
+- ✅ All I/O migrated to YAML (rules, test results, judge reports)
+- ✅ Detection agent outputs .yml rules instead of .json
+- ✅ Integration test script reads/writes YAML
+- ✅ LLM judge script reads/writes YAML
+- ✅ GitHub workflow updated for YAML files
+- ✅ Successfully generated 3 YAML rules in workflow run #21805018922
+
+**YAML Benefits:**
+- More natural for LLMs (fewer syntax errors)
+- Easier human review and git diffs
+- Standard format for detection-as-code workflows
+- Only convert to JSON when deploying to ES API
+
+**Generated YAML Rules:**
+- akira_ransomware_-_shadow_copy_deletion_(t1490).yml
+- akira_ransomware_-_service_stop_(t1489).yml
+- akira_ransomware_-_ransom_note_creation_(t1486).yml
+
 ## In Progress 🚧
 
-### Phase 2: Integration Testing + Empirical LLM Judge (NEXT)
+### Phase 2: Integration Testing + Empirical LLM Judge (READY FOR TESTING)
 
 **Objectives:**
 1. Deploy ephemeral ELK stack in GitHub Actions
@@ -36,13 +57,19 @@
 5. LLM judge evaluates based on ACTUAL test results (not theory)
 6. Block rules with precision <0.80 or recall <0.70
 
-**Files to Create:**
-- scripts/integration_test_ci.py - Orchestrates ELK testing in CI
-- scripts/convert_to_elk.py - Convert ES Detection Rules to ELK format
-- scripts/ingest_test_data.py - Load test payloads into Elasticsearch
-- scripts/evaluate_metrics.py - Calculate TP/FP/FN/TN from results
-- docker/docker-compose.yml - Lightweight ELK stack for GitHub runners
-- Update detection_agent/agent.py - Integrate LLM judge with real results
+**Files Created:**
+- ✅ scripts/integration_test_ci.py - Native ES (apt install), YAML I/O
+- ✅ scripts/run_llm_judge.py - Empirical evaluation with YAML I/O
+
+**Simplified Approach:**
+- No Docker containers - native Elasticsearch via apt (simpler, faster)
+- All functionality in single integration_test_ci.py (no separate convert/ingest scripts)
+- YAML for all I/O (better LLM compatibility)
+
+**Ready to Test:**
+- Integration test script can run locally or in GitHub Actions
+- LLM judge consumes integration test YAML results
+- Need to add workflow step to run these scripts
 
 **Workflow Integration:**
 - Update .github/workflows/generate-detections.yml
