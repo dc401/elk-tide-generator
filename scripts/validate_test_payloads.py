@@ -120,7 +120,8 @@ def main():
             print(f"  - {rule}")
         print()
         print("NOTE: Test payload validation issues are warnings only.")
-        print("Sigma rules passed pySigma validation - that's the MVP.")
+        print("Sigma rules passed pySigma validation - that's the minimum requirement.")
+        print("(MVP = Minimum Viable Product: valid Sigma syntax + ELK conversion)")
         print("Test payloads can be improved iteratively.\n")
         return 0
     else:
