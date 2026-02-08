@@ -42,7 +42,7 @@ class TestCase(BaseModel):
 
 class DetectionRule(BaseModel):
     """Elasticsearch Detection Rule"""
-    name: str = Field(description="Concise detection name (60 chars max)", max_length=60)
+    name: str = Field(description="Concise detection name (100 chars max)", max_length=100)
     description: str = Field(description="What this detects and why (2-3 sentences)")
     type: Literal["query"] = "query"
     query: str = Field(description="Lucene query string")
