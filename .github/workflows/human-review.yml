@@ -219,14 +219,31 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           PR_BODY=$(cat /tmp/review_report.md)
-          
+
+          #try to create PR, but continue even if it fails (repo settings may block Actions)
+          set +e
           gh pr create \
             --base main \
             --head "${{ steps.branch.outputs.branch_name }}" \
             --title "Detection Rules Review - $(date +%Y-%m-%d)" \
-            --body "$PR_BODY"
+            --body "$PR_BODY" \
+            2>&1 | tee /tmp/pr_result.txt
 
-          echo "✅ Pull request created for human review"
+          PR_EXIT_CODE=$?
+          set -e
+
+          if [ $PR_EXIT_CODE -eq 0 ]; then
+            echo "✅ Pull request created successfully"
+          else
+            echo "⚠️  Could not auto-create PR (GitHub Actions may not have permission)"
+            echo ""
+            echo "Please create PR manually:"
+            echo "  Branch: ${{ steps.branch.outputs.branch_name }}"
+            echo "  Base: main"
+            echo "  Title: Detection Rules Review - $(date +%Y-%m-%d)"
+            echo ""
+            echo "Or run: gh pr create --base main --head ${{ steps.branch.outputs.branch_name }}"
+          fi
 
       - name: Summary
         if: steps.check.outputs.has_rules == 'true'
