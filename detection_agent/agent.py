@@ -96,11 +96,16 @@ async def generate_with_retry(client, model_config: Dict, prompt: str,
     retry_config = model_config['retry_config']
     temp = temperature if temperature is not None else model_config['default_temp']
 
-    config = types.GenerateContentConfig(
-        temperature=temp,
-        response_mime_type='application/json',
-        system_instruction=system_instruction
-    )
+    #cant use controlled generation (JSON mode) with Google Search tool
+    config_params = {
+        'temperature': temp,
+        'system_instruction': system_instruction
+    }
+
+    if not tools:
+        config_params['response_mime_type'] = 'application/json'
+
+    config = types.GenerateContentConfig(**config_params)
 
     if tools:
         config.tools = tools
