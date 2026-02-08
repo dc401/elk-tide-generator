@@ -117,21 +117,6 @@ jobs:
     name: Integration Test with Real Elasticsearch
     runs-on: ubuntu-latest
     needs: convert-and-validate
-    services:
-      elasticsearch:
-        image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
-        env:
-          discovery.type: single-node
-          xpack.security.enabled: false
-          ES_JAVA_OPTS: -Xms512m -Xmx512m
-          bootstrap.memory_lock: false
-        ports:
-          - 9200:9200
-        options: >-
-          --health-cmd "curl -f http://localhost:9200/_cluster/health || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 30
 
     steps:
       - uses: actions/checkout@v4
@@ -146,12 +131,44 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Wait for Elasticsearch
+      - name: Install Elasticsearch 8.12.0
         run: |
-          echo "Waiting for Elasticsearch to be ready..."
-          timeout 180 bash -c 'until curl -s http://localhost:9200/_cluster/health | grep -q "green\|yellow"; do echo "Waiting for ES... ($(date +%s))"; sleep 5; done'
-          echo "Elasticsearch health check:"
+          echo "=== Installing Elasticsearch 8.12.0 (pinned version) ==="
+
+          #add elasticsearch GPG key and repository
+          wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main" | sudo tee /etc/apt/sources.list.d/elastic-8.x.list
+
+          #update package list
+          sudo apt-get update
+
+          #install specific version (pinned for reproducibility)
+          sudo apt-get install -y elasticsearch=8.12.0
+
+          #configure for testing (disable security for local testing)
+          echo "network.host: 0.0.0.0" | sudo tee -a /etc/elasticsearch/elasticsearch.yml
+          echo "xpack.security.enabled: false" | sudo tee -a /etc/elasticsearch/elasticsearch.yml
+          echo "discovery.type: single-node" | sudo tee -a /etc/elasticsearch/elasticsearch.yml
+
+          #set JVM heap size (512MB for GitHub runners)
+          sudo sed -i 's/-Xms1g/-Xms512m/g' /etc/elasticsearch/jvm.options
+          sudo sed -i 's/-Xmx1g/-Xmx512m/g' /etc/elasticsearch/jvm.options
+
+          #start elasticsearch
+          sudo systemctl start elasticsearch
+
+          #wait for ES to be ready (max 60s)
+          echo "Waiting for Elasticsearch to start..."
+          timeout 60 bash -c 'until curl -s http://localhost:9200/_cluster/health; do echo "  Still starting... ($(date +%s))"; sleep 2; done'
+
+          #show cluster health
+          echo ""
+          echo "Elasticsearch cluster health:"
           curl -s http://localhost:9200/_cluster/health | jq '.'
+
+          echo ""
+          echo "Elasticsearch version:"
+          curl -s http://localhost:9200 | jq '.version'
 
       - name: Run Integration Tests (REAL ELK - NOT MOCK)
         run: |
@@ -160,6 +177,37 @@ jobs:
             --rules generated/sigma_rules \
             --tests generated/tests \
             --es-url http://localhost:9200
+
+      - name: Show Elasticsearch Diagnostics
+        if: always()
+        run: |
+          echo "=== Elasticsearch Diagnostics ==="
+
+          echo ""
+          echo "Indices:"
+          curl -s http://localhost:9200/_cat/indices?v
+
+          echo ""
+          echo "Test logs index document count:"
+          curl -s http://localhost:9200/test-logs/_count | jq '.'
+
+          echo ""
+          echo "Sample document from test-logs:"
+          curl -s http://localhost:9200/test-logs/_search?size=1 | jq '.hits.hits[0]._source' || true
+
+          echo ""
+          echo "Cluster stats:"
+          curl -s http://localhost:9200/_cluster/stats | jq '.indices.count, .indices.docs'
+
+      - name: Show Elasticsearch Logs (on failure)
+        if: failure()
+        run: |
+          echo "=== Elasticsearch Logs (last 100 lines) ==="
+          sudo tail -100 /var/log/elasticsearch/elasticsearch.log || echo "No logs found"
+
+          echo ""
+          echo "=== Elasticsearch Startup Logs ==="
+          sudo journalctl -u elasticsearch --no-pager | tail -50 || echo "No systemd logs"
 
       - name: Upload Test Results
         if: always()
