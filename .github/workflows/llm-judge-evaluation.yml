@@ -23,7 +23,11 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          echo "Installing dependencies..."
+
           pip install google-cloud-aiplatform pysigma pysigma-backend-elasticsearch pyyaml
+          echo "✓ Dependencies installed successfully"
+
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2

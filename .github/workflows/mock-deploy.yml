@@ -38,7 +38,11 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          echo "Installing dependencies..."
+
           pip install elasticsearch pysigma pysigma-backend-elasticsearch pyyaml
+          echo "✓ Dependencies installed successfully"
+
 
       - name: Wait for Elasticsearch
         run: |

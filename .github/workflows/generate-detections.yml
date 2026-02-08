@@ -33,8 +33,10 @@ jobs:
 
       - name: Install dependencies
         run: |
+          echo "Installing Python dependencies..."
           pip install --upgrade pip
           pip install -r requirements.txt
+          echo "✓ Dependencies installed successfully"
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2

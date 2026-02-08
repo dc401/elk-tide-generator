@@ -29,7 +29,9 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          echo "Installing pySigma dependencies..."
           pip install pysigma pysigma-backend-elasticsearch pyyaml
+          echo "✓ Dependencies installed successfully"
 
       - name: Unit Test Sigma Rules
         run: |
