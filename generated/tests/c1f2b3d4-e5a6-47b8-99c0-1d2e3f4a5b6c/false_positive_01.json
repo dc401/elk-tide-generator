@@ -2,17 +2,27 @@
   "payload_type": "FP",
   "description": "An administrator runs a script to manually delete a single, old shadow copy to free up disk space.",
   "log_entry": {
-    "EventID": 1,
-    "UtcTime": "2024-03-13 09:30:00.150",
-    "ProcessGuid": "{b8c4d2e0-9f70-66a1-9d2e-000000000900}",
-    "ProcessId": 8123,
-    "Image": "C:\\Windows\\System32\\vssadmin.exe",
+    "event": {
+      "code": 1
+    },
+    "@timestamp": "2024-03-13 09:30:00.150",
+    "process": {
+      "entity_id": "{b8c4d2e0-9f70-66a1-9d2e-000000000900}",
+      "pid": 8123,
+      "executable": "C:\\Windows\\System32\\vssadmin.exe",
+      "command_line": "vssadmin delete shadows /shadow={c7f213a5-426b-4835-a6e5-43485ac6944c} /quiet",
+      "parent": {
+        "executable": "C:\\Windows\\System32\\cmd.exe",
+        "command_line": "C:\\Windows\\System32\\cmd.exe /c \"cleanup_script.bat\"",
+        "name": "cmd.exe"
+      },
+      "name": "vssadmin.exe"
+    },
     "FileVersion": "10.0.19041.1",
-    "CommandLine": "vssadmin delete shadows /shadow={c7f213a5-426b-4835-a6e5-43485ac6944c} /quiet",
-    "User": "CORP\\SysAdmin",
-    "ParentProcessGuid": "{b8c4d2e0-9f70-66a1-1b9c-000000000900}",
-    "ParentImage": "C:\\Windows\\System32\\cmd.exe",
-    "ParentCommandLine": "C:\\Windows\\System32\\cmd.exe /c \"cleanup_script.bat\""
+    "user": {
+      "name": "CORP\\SysAdmin"
+    },
+    "ParentProcessGuid": "{b8c4d2e0-9f70-66a1-1b9c-000000000900}"
   },
   "expected_alert": true,
   "evasion_technique": null,

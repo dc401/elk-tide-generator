@@ -2,17 +2,27 @@
   "payload_type": "TN",
   "description": "An administrator lists existing shadow copies to check backup status. This is a common, benign administrative action.",
   "log_entry": {
-    "EventID": 1,
-    "UtcTime": "2024-03-14 14:00:05.123",
-    "ProcessGuid": "{c9d5e3f1-0a81-67b2-ad3f-000000000a00}",
-    "ProcessId": 10111,
-    "Image": "C:\\Windows\\System32\\vssadmin.exe",
+    "event": {
+      "code": 1
+    },
+    "@timestamp": "2024-03-14 14:00:05.123",
+    "process": {
+      "entity_id": "{c9d5e3f1-0a81-67b2-ad3f-000000000a00}",
+      "pid": 10111,
+      "executable": "C:\\Windows\\System32\\vssadmin.exe",
+      "command_line": "vssadmin list shadows",
+      "parent": {
+        "executable": "C:\\Windows\\System32\\cmd.exe",
+        "command_line": "cmd.exe",
+        "name": "cmd.exe"
+      },
+      "name": "vssadmin.exe"
+    },
     "FileVersion": "10.0.19041.1",
-    "CommandLine": "vssadmin list shadows",
-    "User": "CORP\\Helpdesk",
-    "ParentProcessGuid": "{c9d5e3f1-0a81-67b2-1c9d-000000000a00}",
-    "ParentImage": "C:\\Windows\\System32\\cmd.exe",
-    "ParentCommandLine": "cmd.exe"
+    "user": {
+      "name": "CORP\\Helpdesk"
+    },
+    "ParentProcessGuid": "{c9d5e3f1-0a81-67b2-1c9d-000000000a00}"
   },
   "expected_alert": false,
   "evasion_technique": null,
