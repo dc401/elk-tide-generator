@@ -130,13 +130,11 @@ Rule title: {rule_title}
         model='gemini-2.0-flash-exp',
         contents=identify_prompt,
         config=types.GenerateContentConfig(
-            temperature=0.1,  #low temp for deterministic analysis
-            top_p=0.95,  #focus on high-probability tokens
-            top_k=40,  #limit to top 40 tokens
+            temperature=0.3,  #moderate for log source identification
             response_mime_type='application/json',
             thinking_config=types.ThinkingConfig(
                 mode=types.ThinkingMode.THINKING_MODE_ENABLED,
-                budget_tokens=2000  #~1000 words of reasoning
+                budget_tokens=4000  #enough for deep analysis
             )
         )
     )
@@ -157,11 +155,9 @@ Rule title: {rule_title}
             contents=f"Search and summarize: {query}",
             config=types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())],
-                temperature=0.2,  #slightly higher for creative search
-                top_p=0.9,
                 thinking_config=types.ThinkingConfig(
                     mode=types.ThinkingMode.THINKING_MODE_ENABLED,
-                    budget_tokens=1000  #lighter reasoning for search
+                    budget_tokens=3000  #sufficient for research synthesis
                 )
             )
         )
@@ -221,13 +217,11 @@ Generate a field mapping from {identification['log_source']} to Elastic Common S
         model='gemini-2.0-flash-exp',
         contents=mapping_prompt,
         config=types.GenerateContentConfig(
-            temperature=0.05,  #very low for precise mappings
-            top_p=0.95,
-            top_k=20,  #stricter sampling for accuracy
+            temperature=0.2,  #lower temp for precise field mappings
             response_mime_type='application/json',
             thinking_config=types.ThinkingConfig(
                 mode=types.ThinkingMode.THINKING_MODE_ENABLED,
-                budget_tokens=3000  #more reasoning for complex mappings
+                budget_tokens=8000  #extensive reasoning for complex mappings
             )
         )
     )
