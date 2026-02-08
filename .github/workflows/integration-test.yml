@@ -8,11 +8,12 @@ on:
     workflows: ["Generate Detection Rules from CTI"]
     types: [completed]
     branches: [main]
-  workflow_dispatch:  #manual trigger for testing
+  workflow_dispatch:
     inputs:
       artifact_run_id:
-        description: 'Run ID to download artifacts from (optional)'
-        required: false
+        description: 'Artifact run ID from generate-detections workflow'
+        required: true
+        type: string
 
 permissions:
   contents: write
