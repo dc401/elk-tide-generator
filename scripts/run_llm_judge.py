@@ -1,375 +1,282 @@
 #!/usr/bin/env python3
-"""LLM Judge - Empirical Evaluation with YAML I/O"""
+"""
+LLM Judge - Evaluate detection rules based on empirical ES test results
 
-import asyncio
-import os
-import sys
+Makes deployment decision (APPROVE/CONDITIONAL/REJECT) based on:
+- Actual precision/recall from ES integration tests
+- TTP alignment with CTI intelligence
+- Test coverage completeness
+- False positive risk assessment
+"""
+
+import argparse
 import yaml
+import sys
 from pathlib import Path
-from typing import Dict
+import os
+
+#add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from google import genai
 from google.genai import types
 
 
-def safe_yaml_parse(text: str) -> Dict:
-    """safely parse YAML from LLM output"""
-    try:
-        return yaml.safe_load(text)
-    except yaml.YAMLError:
-        #extract from markdown code block
-        if '```yaml' in text:
-            start = text.find('```yaml') + 7
-            end = text.find('```', start)
-            yaml_text = text[start:end].strip()
-            return yaml.safe_load(yaml_text)
-        elif '```' in text:
-            start = text.find('```') + 3
-            end = text.find('```', start)
-            yaml_text = text[start:end].strip()
-            return yaml.safe_load(yaml_text)
-        raise
+def load_integration_results(results_path: Path) -> dict:
+    """load ES integration test results"""
+    with open(results_path) as f:
+        return yaml.safe_load(f)
 
 
-async def evaluate_rule_with_actual_results(
-    client,
-    rule_data: Dict,
-    test_metrics: Dict,
-    model_name: str = 'gemini-2.5-pro'
-) -> Dict:
-    """evaluate single rule based on actual test results"""
-    
-    rule_name = rule_data['name']
-    metrics = test_metrics.get(rule_name, {})
-    
-    prompt = f"""You are a detection engineering expert evaluating Elasticsearch detection rules based on ACTUAL test results from a live SIEM.
+def load_detection_rule(rule_path: Path) -> dict:
+    """load individual detection rule"""
+    with open(rule_path) as f:
+        return yaml.safe_load(f)
 
-## Detection Rule
-```yaml
-{yaml.dump(rule_data, default_flow_style=False, sort_keys=False)}
+
+def evaluate_rule_quality(rule_name: str, rule_data: dict, metrics: dict, client: genai.Client) -> dict:
+    """use LLM to evaluate single rule based on empirical metrics"""
+
+    #build evaluation prompt
+    prompt = f"""You are a SIEM detection engineering expert evaluating a detection rule for production deployment.
+
+# Rule to Evaluate
+
+**Name:** {rule_data.get('name', 'Unknown')}
+**Description:** {rule_data.get('description', 'N/A')}
+**Severity:** {rule_data.get('severity', 'unknown')}
+**Risk Score:** {rule_data.get('risk_score', 0)}
+
+**Query:**
+```
+{rule_data.get('query', 'N/A')}
 ```
 
-## Actual Integration Test Results
+**MITRE ATT&CK Mapping:**
+{yaml.dump(rule_data.get('threat', []), default_flow_style=False)}
 
-True Positives (TP):
-  Detected: {metrics.get('tp_detected', 0)} / {metrics.get('tp_total', 0)} malicious events
-  Status: These SHOULD alert and DID alert ✓
+**Test Cases Defined:** {len(rule_data.get('test_cases', []))}
 
-False Negatives (FN):
-  Missed: {metrics.get('tp_total', 0) - metrics.get('tp_detected', 0)} malicious events
-  FN test cases (evasion attempts): {metrics.get('fn_total', 0)}
-  FN that wrongly alerted: {metrics.get('fn_missed', 0)} (evasion failed)
+# Empirical Test Results (from Elasticsearch)
 
-False Positives (FP):
-  Triggered: {metrics.get('fp_triggered', 0)} / {metrics.get('fp_total', 0)} benign events
-  Status: These should NOT alert but DID alert ✗
+These are ACTUAL results from deploying the rule to Elasticsearch and testing with embedded payloads:
 
-True Negatives (TN):
-  Wrongly triggered: {metrics.get('tn_triggered', 0)} / {metrics.get('tn_total', 0)} normal events
-  Status: These should NOT alert and should REMAIN silent
+**Precision:** {metrics.get('precision', 0):.2f} (TP / (TP + FP))
+**Recall:** {metrics.get('recall', 0):.2f} (TP / (TP + FN))
+**F1 Score:** {metrics.get('f1_score', 0):.2f}
+**Pass Threshold:** {metrics.get('pass_threshold', False)}
 
-Empirical Metrics:
-  Precision: {metrics.get('precision', 0):.3f} (threshold ≥0.80)
-  Recall: {metrics.get('recall', 0):.3f} (threshold ≥0.70)
-  F1 Score: {metrics.get('f1_score', 0):.3f}
+**Test Results:**
+- True Positives (TP): {metrics.get('tp_count', 0)} (malicious activity correctly detected)
+- False Negatives (FN): {metrics.get('fn_count', 0)} (malicious activity missed)
+- False Positives (FP): {metrics.get('fp_count', 0)} (normal activity incorrectly flagged)
+- True Negatives (TN): {metrics.get('tn_count', 0)} (normal activity correctly ignored)
 
-## Your Task
+# Evaluation Criteria
 
-Evaluate this detection rule based on its ACTUAL performance in Elasticsearch.
+Evaluate this rule on:
 
-Return YAML:
+1. **TTP Alignment (0.0-1.0):** Does the rule actually detect the mapped MITRE technique based on TP results?
+2. **Test Coverage (0.0-1.0):** Are edge cases covered? Did we test enough scenarios?
+3. **False Positive Risk (LOW/MEDIUM/HIGH):** Based on actual FP count and query specificity
+4. **Detection Quality (measured):** Precision ≥ 0.80 and Recall ≥ 0.70 thresholds met?
+5. **Evasion Resistance (0.0-1.0):** Can attacker bypass easily? Do FN tests reveal weaknesses?
+
+# Deployment Decision
+
+Make ONE of these decisions:
+
+- **APPROVE:** Rule meets all thresholds, ready for production
+- **CONDITIONAL:** Rule is functional but has minor issues (document what to monitor)
+- **REJECT:** Rule fails thresholds or has critical issues
+
+# Output Format (YAML)
+
+Respond with ONLY this YAML structure, no additional text:
+
 ```yaml
-quality_score: 0.0-1.0  # overall quality (≥0.70 to pass)
-precision_assessment:
-  score: {metrics.get('precision', 0):.3f}
-  pass: true/false  # ≥0.80
-  issues:
-    - list of false positive causes
-recall_assessment:
-  score: {metrics.get('recall', 0):.3f}
-  pass: true/false  # ≥0.70
-  issues:
-    - list of missed detection causes
-evasion_resistance:
-  fn_tests_total: {metrics.get('fn_total', 0)}
-  fn_wrongly_alerted: {metrics.get('fn_missed', 0)}
-  analysis: did evasion techniques work or fail?
-deployment_decision: APPROVE | REFINE | REJECT
-reasoning: detailed explanation based on actual test results
-recommendations:
-  - specific fixes if not approved
+rule_name: "{rule_name}"
+quality_score: 0.0  # overall score 0.0-1.0
+deployment_decision: APPROVE  # APPROVE, CONDITIONAL, or REJECT
+evaluation:
+  ttp_alignment: 0.0
+  test_coverage: 0.0
+  fp_risk: LOW  # LOW, MEDIUM, or HIGH
+  evasion_resistance: 0.0
+  precision_met: true  # >= 0.80
+  recall_met: true  # >= 0.70
+reasoning:
+  strengths:
+    - "Specific strength observed"
+  weaknesses:
+    - "Specific weakness observed"
+  recommendations:
+    - "Actionable improvement"
 ```
-
-Focus on:
-1. Did the rule catch the attacks it was designed for? (TP rate)
-2. Did it create too many false alarms? (FP rate)
-3. Can attackers easily evade it? (FN test analysis)
-4. Is it production-ready based on thresholds?
 """
 
-    config = types.GenerateContentConfig(temperature=0.2)
-    
+    #call Gemini Pro for evaluation
     response = client.models.generate_content(
-        model=model_name,
+        model='gemini-2.0-flash-exp',
         contents=prompt,
-        config=config
-    )
-    
-    return safe_yaml_parse(response.text)
-
-
-async def evaluate_rule_with_refinement(
-    client,
-    rule_file: Path,
-    rule_data: Dict,
-    test_metrics: Dict,
-    max_refinement_attempts: int = 2,
-    model_name: str = 'gemini-2.5-pro'
-) -> Dict:
-    """evaluate rule with automatic refinement if judge recommends it"""
-
-    original_file = rule_file
-    current_rule_path = rule_file
-    current_rule = rule_data
-
-    for refinement_iteration in range(max_refinement_attempts + 1):
-        if refinement_iteration > 0:
-            print(f"\n  🔄 Judge refinement iteration {refinement_iteration}/{max_refinement_attempts}")
-
-        #evaluate current rule
-        evaluation = await evaluate_rule_with_actual_results(
-            client,
-            current_rule,
-            test_metrics,
-            model_name
+        config=types.GenerateContentConfig(
+            temperature=0.2,  #precise evaluation
+            max_output_tokens=2048,
         )
+    )
 
-        print(f"  Quality Score: {evaluation['quality_score']:.2f}")
-        print(f"  Precision: {evaluation['precision_assessment']['score']:.3f} ({'✓ PASS' if evaluation['precision_assessment']['pass'] else '✗ FAIL'})")
-        print(f"  Recall: {evaluation['recall_assessment']['score']:.3f} ({'✓ PASS' if evaluation['recall_assessment']['pass'] else '✗ FAIL'})")
-        print(f"  Decision: {evaluation['deployment_decision']}")
+    #parse YAML response
+    response_text = response.text.strip()
+    if '```yaml' in response_text:
+        response_text = response_text.split('```yaml')[1].split('```')[0].strip()
+    elif '```' in response_text:
+        response_text = response_text.split('```')[1].split('```')[0].strip()
 
-        #if approved or rejected, return
-        if evaluation['deployment_decision'] in ['APPROVE', 'REJECT']:
-            if refinement_iteration > 0 and evaluation['deployment_decision'] == 'APPROVE':
-                print(f"  ✓ Approved after {refinement_iteration} refinement(s)")
-                #save refined rule back
-                with open(current_rule_path) as f:
-                    refined_content = f.read()
-                with open(original_file, 'w') as f:
-                    f.write(refined_content)
-
-            evaluation['refined'] = refinement_iteration > 0
-            evaluation['refinement_iterations'] = refinement_iteration
-            return evaluation
-
-        #if this was last attempt, return REFINE result
-        if refinement_iteration >= max_refinement_attempts:
-            print(f"  ⚠ Still needs refinement after {max_refinement_attempts} attempts")
-            evaluation['refined'] = False
-            evaluation['refinement_iterations'] = refinement_iteration
-            return evaluation
-
-        #refine based on judge's recommendations
-        print(f"  Refining based on judge feedback...")
-
-        #import refinement function
-        sys.path.insert(0, str(Path(__file__).parent.parent))
-        from detection_agent.per_rule_refinement import refine_rule_with_feedback
-
-        feedback = {
-            'quality_score': evaluation['quality_score'],
-            'recommendation': evaluation['deployment_decision'],
-            'issues': evaluation['precision_assessment'].get('issues', []) + evaluation['recall_assessment'].get('issues', []),
-            'recommendations': evaluation.get('recommendations', []),
-            'precision': evaluation['precision_assessment']['score'],
-            'recall': evaluation['recall_assessment']['score']
+    try:
+        evaluation = yaml.safe_load(response_text)
+        return evaluation
+    except yaml.YAMLError as e:
+        print(f"WARNING: Failed to parse LLM response for {rule_name}: {e}")
+        print(f"Response: {response_text}")
+        #return safe default
+        return {
+            'rule_name': rule_name,
+            'quality_score': 0.0,
+            'deployment_decision': 'REJECT',
+            'evaluation': {
+                'ttp_alignment': 0.0,
+                'test_coverage': 0.0,
+                'fp_risk': 'HIGH',
+                'evasion_resistance': 0.0,
+                'precision_met': False,
+                'recall_met': False
+            },
+            'reasoning': {
+                'strengths': [],
+                'weaknesses': ['LLM evaluation failed to parse'],
+                'recommendations': ['Re-evaluate manually']
+            }
         }
 
-        refined_rule = await refine_rule_with_feedback(
-            client=client,
-            original_rule=current_rule,
-            feedback=feedback,
-            refinement_type='judge',
-            cti_content="",  #not needed for judge-based refinement
-            prompts={},
-            max_attempts=2
-        )
 
-        if not refined_rule:
-            print(f"  ✗ Refinement failed")
-            evaluation['refined'] = False
-            evaluation['refinement_iterations'] = refinement_iteration
-            return evaluation
+def make_deployment_decision(evaluations: list) -> str:
+    """aggregate individual evaluations into overall decision"""
+    if not evaluations:
+        return 'REJECT'
 
-        #save refined rule to temp location
-        temp_refined = original_file.parent / f"{original_file.stem}_refined_judge_{refinement_iteration}.yml"
-        with open(temp_refined, 'w') as f:
-            yaml.dump(refined_rule, f, default_flow_style=False, sort_keys=False)
+    approved = [e for e in evaluations if e['deployment_decision'] == 'APPROVE']
 
-        current_rule_path = temp_refined
-        current_rule = refined_rule
-        print(f"  Re-evaluating refined rule...")
+    total = len(evaluations)
+    approved_pct = len(approved) / total
 
-    #should not reach here
-    evaluation['refined'] = False
-    evaluation['refinement_iterations'] = max_refinement_attempts
-    return evaluation
+    #deployment decision logic
+    if approved_pct >= 0.75:  #75%+ approved
+        return 'APPROVE'
+    elif approved_pct >= 0.50:  #50-75% approved
+        return 'CONDITIONAL'
+    else:
+        return 'REJECT'
 
 
-async def run_llm_judge(
-    rules_dir: Path,
-    test_results_file: Path,
-    output_file: Path,
-    project_id: str,
-    location: str = 'global',
-    enable_refinement: bool = True
-):
-    """run LLM judge on all rules with optional refinement"""
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--integration-results', required=True, help='Integration test results YAML')
+    parser.add_argument('--rules-dir', required=True, help='Detection rules directory')
+    parser.add_argument('--output', default='llm_judge_report.yml', help='Output report path')
+    parser.add_argument('--project', help='GCP project ID')
+    parser.add_argument('--location', default='global', help='GCP location')
 
-    print(f"\n{'='*80}")
-    print("LLM JUDGE - EMPIRICAL EVALUATION")
-    if enable_refinement:
-        print("(with judge-recommended refinement)")
-    print(f"{'='*80}\n")
-    
+    args = parser.parse_args()
+
+    print("\n" + "="*80)
+    print("LLM JUDGE - DEPLOYMENT DECISION")
+    print("="*80 + "\n")
+
+    #load integration test results
+    integration_results = load_integration_results(Path(args.integration_results))
+    metrics = integration_results.get('metrics', {})
+
+    if not metrics:
+        print("ERROR: No metrics found in integration results")
+        sys.exit(1)
+
+    print(f"Loaded integration results: {len(metrics)} rules tested\n")
+
+    #setup Gemini client
+    project_id = args.project or os.environ.get('GOOGLE_CLOUD_PROJECT')
+    if not project_id:
+        print("ERROR: No GCP project ID")
+        print("Set via --project or GOOGLE_CLOUD_PROJECT env var")
+        sys.exit(1)
+
     os.environ['GOOGLE_GENAI_USE_VERTEXAI'] = 'true'
     client = genai.Client(
         vertexai=True,
         project=project_id,
-        location=location
+        location=args.location
     )
-    
-    #load integration test results (YAML)
-    with open(test_results_file) as f:
-        test_results = yaml.safe_load(f)
-    
-    metrics = test_results['metrics']
-    
-    print(f"Loaded: {test_results_file}")
-    print(f"  Total rules tested: {len(metrics)}")
-    print(f"  Passed thresholds: {test_results['summary']['rules_passed']}")
-    print(f"  Failed thresholds: {test_results['summary']['rules_failed']}")
-    
-    evaluations = {}
 
-    for rule_file in rules_dir.glob("*.yml"):
-        with open(rule_file) as f:
-            rule_data = yaml.safe_load(f)
+    print(f"Gemini Pro evaluation enabled (project: {project_id})\n")
 
-        rule_name = rule_data['name']
+    #evaluate each rule
+    evaluations = []
+    rules_dir = Path(args.rules_dir)
+
+    for rule_file in sorted(rules_dir.glob('*.yml')):
+        rule_name = rule_file.stem
 
         if rule_name not in metrics:
-            print(f"\n⚠ Skipping {rule_name} - no test results")
+            print(f"WARNING: No metrics for {rule_name}, skipping")
             continue
 
-        print(f"\n[Judge] Evaluating: {rule_name}")
+        print(f"Evaluating: {rule_name}")
 
-        if enable_refinement:
-            evaluation = await evaluate_rule_with_refinement(
-                client,
-                rule_file,
-                rule_data,
-                metrics,
-                max_refinement_attempts=2
-            )
-        else:
-            evaluation = await evaluate_rule_with_actual_results(
-                client,
-                rule_data,
-                metrics
-            )
-            print(f"  Quality Score: {evaluation['quality_score']:.2f}")
-            print(f"  Precision: {evaluation['precision_assessment']['score']:.3f} ({'✓ PASS' if evaluation['precision_assessment']['pass'] else '✗ FAIL'})")
-            print(f"  Recall: {evaluation['recall_assessment']['score']:.3f} ({'✓ PASS' if evaluation['recall_assessment']['pass'] else '✗ FAIL'})")
-            print(f"  Decision: {evaluation['deployment_decision']}")
+        rule_data = load_detection_rule(rule_file)
+        rule_metrics = metrics[rule_name]
 
-        evaluations[rule_name] = evaluation
-    
-    approved = [r for r, e in evaluations.items() if e['deployment_decision'] == 'APPROVE']
-    refine = [r for r, e in evaluations.items() if e['deployment_decision'] == 'REFINE']
-    rejected = [r for r, e in evaluations.items() if e['deployment_decision'] == 'REJECT']
-    
-    #count judge-refined rules
-    judge_refined = [r for r, e in evaluations.items() if e.get('refined', False)]
+        evaluation = evaluate_rule_quality(rule_name, rule_data, rule_metrics, client)
+        evaluations.append(evaluation)
+
+        print(f"  Quality: {evaluation['quality_score']:.2f}")
+        print(f"  Decision: {evaluation['deployment_decision']}")
+        print()
+
+    #make overall deployment decision
+    overall_decision = make_deployment_decision(evaluations)
+
+    #build report
+    summary = {
+        'total_rules': len(evaluations),
+        'rules_approved': len([e for e in evaluations if e['deployment_decision'] == 'APPROVE']),
+        'rules_conditional': len([e for e in evaluations if e['deployment_decision'] == 'CONDITIONAL']),
+        'rules_rejected': len([e for e in evaluations if e['deployment_decision'] == 'REJECT']),
+        'average_quality_score': sum(e['quality_score'] for e in evaluations) / len(evaluations) if evaluations else 0.0
+    }
 
     report = {
-        'timestamp': test_results['timestamp'],
-        'refinement_enabled': enable_refinement,
-        'summary': {
-            'total_rules': len(evaluations),
-            'approved': len(approved),
-            'needs_refinement': len(refine),
-            'rejected': len(rejected),
-            'judge_refined': len(judge_refined)
-        },
-        'approved_rules': approved,
-        'needs_refinement': refine,
-        'rejected_rules': rejected,
-        'judge_refined_rules': judge_refined,
-        'evaluations': evaluations,
-        'integration_test_summary': test_results['summary']
+        'timestamp': integration_results.get('timestamp'),
+        'deployment_decision': overall_decision,
+        'summary': summary,
+        'evaluations': evaluations
     }
-    
-    #save as YAML
-    with open(output_file, 'w') as f:
+
+    #save report
+    with open(args.output, 'w') as f:
         yaml.dump(report, f, default_flow_style=False, sort_keys=False)
-    
-    print(f"\n{'='*80}")
-    print("LLM JUDGE RESULTS")
-    print(f"{'='*80}")
-    print(f"Total: {len(evaluations)}")
-    print(f"✓ Approved: {len(approved)}")
-    print(f"⚠ Needs refinement: {len(refine)}")
-    print(f"✗ Rejected: {len(rejected)}")
-    if enable_refinement:
-        print(f"🔄 Judge refined: {len(judge_refined)}")
-    print(f"\nReport saved: {output_file}")
 
-    if len(approved) == 0 and len(evaluations) > 0:
-        print("\n✗ No rules approved for deployment")
+    print("="*80)
+    print(f"Decision: {overall_decision}")
+    print(f"Approved: {summary['rules_approved']}/{summary['total_rules']}")
+    print(f"Average Quality: {summary['average_quality_score']:.2f}")
+    print("="*80)
+    print(f"\nReport saved to {args.output}")
+
+    #exit code based on decision
+    if overall_decision == 'REJECT':
         sys.exit(1)
-
-    return report
-
-
-def main():
-    import argparse
-
-    parser = argparse.ArgumentParser(description='LLM Judge - Empirical Evaluation with Refinement')
-    parser.add_argument('--rules-dir', default='generated/detection_rules')
-    parser.add_argument('--test-results', default='integration_test_results.yml')
-    parser.add_argument('--output', default='llm_judge_report.yml')
-    parser.add_argument('--project', help='GCP project ID')
-    parser.add_argument('--location', default='global')
-    parser.add_argument('--no-refinement', action='store_true', help='Disable judge-recommended refinement')
-
-    args = parser.parse_args()
-    
-    project_id = args.project or os.environ.get('GOOGLE_CLOUD_PROJECT')
-    if not project_id:
-        print("ERROR: GCP project ID required")
-        sys.exit(1)
-    
-    rules_dir = Path(args.rules_dir)
-    test_results_file = Path(args.test_results)
-    
-    if not rules_dir.exists():
-        print(f"ERROR: {rules_dir} not found")
-        sys.exit(1)
-    
-    if not test_results_file.exists():
-        print(f"ERROR: {test_results_file} not found")
-        sys.exit(1)
-    
-    asyncio.run(run_llm_judge(
-        rules_dir=rules_dir,
-        test_results_file=test_results_file,
-        output_file=Path(args.output),
-        project_id=project_id,
-        location=args.location,
-        enable_refinement=not args.no_refinement
-    ))
+    else:
+        sys.exit(0)
 
 
 if __name__ == '__main__':

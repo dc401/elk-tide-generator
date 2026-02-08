@@ -60,18 +60,41 @@ Implement remaining backlog items from Stage 2:
 
 ## In Progress
 
-### 🚧 Testing Integration Workflow
+### 🚧 Testing Full Pipeline
 
 **Next Steps:**
-1. Trigger integration test workflow manually
-2. Verify ES installation works in GitHub runner
-3. Check test results and refinement process
-4. Validate artifact uploads
+1. Monitor generate-detections workflow (currently running)
+2. Verify integration-test auto-triggers after completion
+3. Verify llm-judge auto-triggers after integration tests
+4. Check end-to-end artifact chain
 
-**Expected Output:**
-- `integration_test_results.yml` artifact
-- `test_report.md` summary
-- Refined rules committed (if needed)
+**Expected Flow:**
+- generate-detections.yml → detection-rules artifact
+- integration-test.yml → integration-test-results artifact
+- llm-judge.yml → llm-judge-report artifact + PR creation
+
+---
+
+## Recently Completed
+
+### ✅ LLM Judge Workflow Created
+
+**File:** `.github/workflows/llm-judge.yml`
+**Created:** 2026-02-08 18:50
+
+**Features:**
+- Triggers after integration-test.yml completes successfully
+- Downloads integration test results + detection rules artifacts
+- Runs Gemini Pro evaluation on each rule
+- Evaluates based on empirical ES metrics (not theoretical)
+- Makes deployment decision (APPROVE/CONDITIONAL/REJECT)
+- Stages approved rules to staged_rules/ with unique UIDs
+- Creates PR for human review automatically
+
+**Supporting Scripts:**
+1. `scripts/run_llm_judge.py` - Main LLM evaluation logic
+2. `scripts/stage_approved_rules.py` - Move passing rules with UIDs
+3. `scripts/create_review_pr.py` - Format and create GitHub PR
 
 ---
 
@@ -79,19 +102,16 @@ Implement remaining backlog items from Stage 2:
 
 ### High Priority
 
-1. **LLM Judge Workflow**
-   - Create `.github/workflows/llm-judge.yml`
-   - Read ES integration test results
-   - Evaluate rules empirically (based on actual metrics)
-   - Make deployment decision (APPROVE/CONDITIONAL/REJECT)
-   - Trigger refinement on REFINE decision
-   - Move approved rules to staged_rules/
+1. **Test Full Pipeline**
+   - Wait for generate-detections to complete
+   - Monitor integration-test auto-trigger
+   - Monitor llm-judge auto-trigger
+   - Verify PR creation
 
-2. **Test Integration Workflow**
-   - Manual trigger test
-   - Verify ES deployment
-   - Check refinement logic
-   - Validate artifact creation
+2. **Validate Artifact Chain**
+   - Check artifact downloads work across workflows
+   - Verify staged_rules/ structure correct
+   - Review PR format and content
 
 ### Medium Priority
 
