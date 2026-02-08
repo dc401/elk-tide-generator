@@ -1,6 +1,6 @@
 """Pydantic schemas for Elasticsearch Detection Rules"""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import List, Dict, Optional, Literal
 from datetime import datetime
 
@@ -91,7 +91,14 @@ class DetectionRuleOutput(BaseModel):
     cti_context: Dict = Field(
         description="Context from CTI source (threat actor, TTPs, environment)"
     )
-    total_rules: int = Field(description="Number of rules generated")
+    total_rules: int = Field(default=0, description="Number of rules generated")
+
+    @model_validator(mode='after')
+    def compute_total_rules(self):
+        """auto-compute total_rules if not provided"""
+        if not self.total_rules and self.rules:
+            self.total_rules = len(self.rules)
+        return self
 
 
 class ValidationResult(BaseModel):
