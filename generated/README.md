@@ -1,50 +1,90 @@
-# Generated Artifacts Directory Structure
+# Generated Artifacts Directory
 
-This directory contains detection rules and artifacts in various stages of the pipeline.
+This directory contains agent-generated detection rules and test artifacts.
 
-## Directory Layout
+**Note:** Most artifacts are gitignored to keep the repo clean. They are generated fresh by the agent during each run.
+
+## Directory Structure
 
 ```
 generated/
-├── sigma_rules/              # STAGING: Draft rules from agent (cleaned on PR)
-├── tests/                    # STAGING: Test payloads for draft rules (cleaned on PR)
-├── production_rules/         # PRODUCTION: Human-approved final rules
-│   ├── *.yml                # Production Sigma rules
-│   └── metadata/            # Rule metadata (quality scores, approval timestamps)
-├── STATIC_QUALITY_REPORT.json    # Static LLM judge evaluation
-├── PASSING_RULE_IDS.json         # Rules that passed quality gate
-├── ELK_QUERIES.json              # Converted Elasticsearch queries  
-├── ELK_VALIDATION_REPORT.json    # ELK query validation results
-└── INTEGRATION_TEST_RESULTS.json # Real ELK integration test metrics
+├── detection_rules/          # Generated Elasticsearch detection rules (YAML)
+│   └── *.yml                 # One file per detection rule
+│
+├── tests/                    # Test payloads for each rule
+│   └── {rule_id}/            # Test directory per rule
+│       ├── true_positive_*.json
+│       ├── false_negative_*.json
+│       ├── false_positive_*.json
+│       └── true_negative_*.json
+│
+├── staging/                  # Temporary validation artifacts
+│   ├── json/                 # YAML → JSON conversions
+│   └── refinement/           # Refinement attempt history
+│
+├── production_rules/         # Human-approved rules ready for deployment
+│   └── *.yml                 # Rules that passed all quality gates + human review
+│
+├── cti_context.yml           # CTI analysis from agent
+├── REFINEMENT_REPORT.json    # Pipeline-level refinement results
+└── STATIC_QUALITY_REPORT.json # Validation quality scores
 ```
 
-## Pipeline Flow
+## What's Tracked in Git
 
-1. **Generation** → `sigma_rules/` + `tests/`
-   - Agent generates draft Sigma rules and test payloads
-   - Static LLM judge filters low-quality rules
+- ✅ `generated/README.md` (this file)
+- ✅ `generated/production_rules/README.md`
+- ❌ All generated artifacts (ignored via .gitignore)
 
-2. **Validation** → Quality reports
-   - Unit tests verify Sigma syntax
-   - Convert to ELK queries and validate
-   - Integration tests run against real Elasticsearch
-   - LLM judge evaluates based on test results
+## Workflow
 
-3. **Human Review** → PR created
-   - Staged rules moved to PR for human review
-   - Reviewer checks rule logic, quality metrics, test coverage
+1. **Generate Rules:** Agent reads CTI from `cti_src/` → creates rules in `detection_rules/`
+2. **Validation:** `scripts/validate_rules.py` validates rules → saves results
+3. **Integration Testing:** `scripts/integration_test_ci.py` tests against Elasticsearch
+4. **LLM Judge:** `scripts/run_llm_judge.py` evaluates based on test results
+5. **Human Review:** Approved rules move to `production_rules/`
+6. **Deployment:** Rules from `production_rules/` deploy to SIEM
 
-4. **Production** → `production_rules/`
-   - After PR approval, rules moved to production_rules/
-   - Staging artifacts (sigma_rules/, tests/) cleaned up
-   - Production rules deployed to SIEM
+## Usage
 
-## File Lifecycle
+### Generate New Rules
+```bash
+python run_agent.py --interactive
+```
 
-- **Staging files** (sigma_rules/, tests/): Ephemeral, regenerated on each run
-- **Quality reports**: Committed to track evaluation history
-- **Production rules**: Persistent, only updated via human-approved PRs
+### Validate Generated Rules
+```bash
+python scripts/validate_rules.py \
+  --rules-dir generated/detection_rules \
+  --project YOUR_GCP_PROJECT
+```
+
+### Integration Test
+```bash
+python scripts/integration_test_ci.py \
+  --rules-dir generated/detection_rules \
+  --project YOUR_GCP_PROJECT
+```
+
+### LLM Judge Evaluation
+```bash
+python scripts/run_llm_judge.py \
+  --rules-dir generated/detection_rules \
+  --test-results integration_test_results.yml \
+  --project YOUR_GCP_PROJECT
+```
 
 ## Cleanup
 
-Run `scripts/cleanup_staging.sh` to remove all staging artifacts before a fresh generation run.
+To remove all generated artifacts:
+```bash
+./scripts/cleanup_staging.sh
+```
+
+Or manually:
+```bash
+rm -rf generated/detection_rules/*
+rm -rf generated/tests/*
+rm -rf generated/staging/*
+rm -f generated/*.json generated/*.yml
+```

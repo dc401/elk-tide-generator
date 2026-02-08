@@ -25,6 +25,10 @@ Thumbs.db
 session_results/
 generated/staging/
 generated/.github/
+generated/detection_rules/
+generated/tests/
+generated/cti_context.yml
+generated/*.json
 *.log
 .env
 
@@ -36,7 +40,8 @@ logs/
 *.tmp
 .cache/
 
-#Archives
+#Archives (including snapshots)
 *.zip
 *.tar.gz
 *.tgz
+snapshots/*.tar.gz

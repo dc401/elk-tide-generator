@@ -142,30 +142,17 @@ jobs:
             exit 1
           fi
 
-      - name: Commit Generated Rules
-        id: commit
+      - name: Count Generated Rules
+        id: count
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          #commit generated detection rules
-          git add generated/detection_rules/ 2>/dev/null || true
-          git add generated/cti_context.yml 2>/dev/null || true
-
-          #check if there are changes
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-            echo "rule_count=0" >> $GITHUB_OUTPUT
-          else
+          #count generated rules for summary
+          if [ -d "generated/detection_rules" ]; then
             RULE_COUNT=$(find generated/detection_rules -name "*.yml" 2>/dev/null | wc -l || echo 0)
             echo "rule_count=$RULE_COUNT" >> $GITHUB_OUTPUT
-
-            git commit -m "ci: generated $RULE_COUNT detection rules from CTI [skip ci]"
-
-            #pull and rebase in case remote was updated during workflow run
-            git pull --rebase || true
-
-            git push
+            echo "Generated $RULE_COUNT detection rules"
+          else
+            echo "rule_count=0" >> $GITHUB_OUTPUT
+            echo "No rules generated"
           fi
 
       - name: Upload Generated Rules
@@ -185,12 +172,14 @@ jobs:
           echo "✓ Detection Generation Complete"
           echo "================================"
           echo ""
-          RULE_COUNT="${{ steps.commit.outputs.rule_count }}"
+          RULE_COUNT="${{ steps.count.outputs.rule_count }}"
           echo "Generated $RULE_COUNT Elasticsearch Detection Rules"
           echo ""
-          echo "Next steps:"
-          echo "  1. Create integration test script"
-          echo "  2. Add refinement loop (2-3 iterations)"
-          echo "  3. Build deployment workflow"
+          echo "Generated artifacts uploaded as workflow artifacts."
+          echo "Download from Actions tab to review rules."
           echo ""
-          echo "Generated artifacts committed to generated/"
+          echo "Next steps:"
+          echo "  1. Download artifacts and review generated rules"
+          echo "  2. Run validation: scripts/validate_rules.py"
+          echo "  3. Run integration tests: scripts/integration_test_ci.py"
+          echo "  4. Run LLM judge: scripts/run_llm_judge.py"
