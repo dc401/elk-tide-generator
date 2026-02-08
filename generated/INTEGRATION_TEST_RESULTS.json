@@ -1,9 +1,13 @@
 {
-  "timestamp": "2026-02-08T03:30:19.180494",
-  "status": "skipped",
-  "reason": "No test payloads found",
-  "rules_tested": 0,
-  "total_tests": 0,
-  "passed": 0,
-  "failed": 0
+  "e2f7b1d4-8c8a-4d7a-8f6a-0d9c44b1b3e1": {
+    "rule_title": "Akira Ransomware Inhibit System Recovery via Command",
+    "rule_level": "HIGH",
+    "tp": 0,
+    "fp": 0,
+    "tn": 10,
+    "fn": 0,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1_score": 0.0
+  }
 }
