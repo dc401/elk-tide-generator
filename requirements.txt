@@ -89,6 +89,7 @@ pydantic_core==2.41.5
 Pygments==2.19.2
 PyJWT==2.11.0
 pyparsing==3.3.2
+luqum==0.13.0
 pySigma==1.1.0
 pySigma-backend-elasticsearch==2.0.2
 pysigma-pipeline-sysmon==2.0.0

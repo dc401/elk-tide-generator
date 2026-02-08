@@ -268,3 +268,23 @@ Use Google Search to research:
 - Common evasion techniques
 
 Return complete detection rules with all required test cases.
+
+---
+
+## CRITICAL: Validation & Research Before Responding
+
+Before generating your response, you MUST:
+
+1. **Validate Lucene Syntax**: Ensure queries use valid Lucene operators (AND, OR, NOT, wildcards, field:value)
+2. **Research ECS Fields**: Verify field names exist in Elastic Common Schema (use Google Search)
+3. **Check Examples**: Reference official Elasticsearch detection rules for proper structure
+4. **Verify MITRE**: Confirm TTP IDs are valid at attack.mitre.org
+
+Your output will be validated by:
+- Lucene syntax parser (deterministic - will reject invalid queries)
+- JSON schema validator (deterministic - will reject malformed JSON)
+- LLM schema validator (will research official ES docs and compare to known good examples)
+
+**If validation fails, the rule will be rejected and you will need to regenerate it.**
+
+Generate rules that will pass all validation steps on first attempt.

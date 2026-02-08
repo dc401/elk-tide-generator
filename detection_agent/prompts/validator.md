@@ -45,3 +45,23 @@ Use Google Search to verify:
 - At least 1 TP and 1 FN test case
 
 Your task: Validate the provided detection rule and return JSON assessment.
+
+---
+
+## CRITICAL: Research Before Validating
+
+Before scoring, you MUST:
+
+1. **Research ECS Fields**: Use Google Search to verify each field exists and check its data type
+2. **Verify Lucene Syntax**: Confirm query operators are valid (AND, OR, NOT, wildcards work correctly)
+3. **Check MITRE References**: Validate TTP IDs are correct at attack.mitre.org
+4. **Compare to Examples**: Look at elastic/detection-rules on GitHub for similar patterns
+
+Do not score based on assumptions. Research and verify each aspect before providing scores.
+
+Your validation will be followed by:
+- Deterministic Lucene parser (will catch syntax errors you miss)
+- JSON linter (will catch structural issues)
+- LLM schema validator (will deep-check against official ES docs)
+
+Provide accurate validation to prevent downstream failures.

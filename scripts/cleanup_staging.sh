@@ -1,24 +1,23 @@
 #!/bin/bash
-#cleanup old staging artifacts before fresh run
+#cleanup staging folders and mixed JSON/YAML artifacts
 
-echo "Cleaning stale staging artifacts..."
+echo "Cleaning staging artifacts..."
 
-#remove old session files
-rm -f generated/iterative_session_*.json
-echo "✓ Removed old session files"
+#remove temp staging folders
+rm -rf generated/staging/
+echo "✓ Removed generated/staging/"
 
-#remove old quality reports (will be regenerated)
-rm -f generated/STATIC_QUALITY_REPORT.json
-rm -f generated/PASSING_RULE_IDS.json  
-rm -f generated/ELK_QUERIES.json
-rm -f generated/ELK_VALIDATION_REPORT.json
-rm -f generated/INTEGRATION_TEST_RESULTS.json
-echo "✓ Removed old quality reports"
+#remove mixed JSON in detection_rules (keep only YAML)
+if [ -d "generated/detection_rules" ]; then
+    JSON_COUNT=$(find generated/detection_rules -name "*.json" 2>/dev/null | wc -l)
+    if [ "$JSON_COUNT" -gt 0 ]; then
+        find generated/detection_rules -name "*.json" -delete
+        echo "✓ Removed $JSON_COUNT JSON files from detection_rules/"
+    fi
+fi
 
-#clean temporary folders
-rm -rf generated/sigma_rules_filtered
-rm -rf generated/all_rules_backup
-rm -rf generated/tests_backup
-echo "✓ Removed temporary folders"
+#remove old integration test results
+rm -f integration_test_results.yml llm_judge_report.yml
+echo "✓ Removed old test results"
 
-echo "Staging cleanup complete!"
+echo "Cleanup complete"
