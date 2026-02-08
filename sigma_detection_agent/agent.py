@@ -92,10 +92,11 @@ FLASH_RETRY_CONFIG = types.HttpOptions(
 INTER_AGENT_DELAY = 3.0  #3 seconds between agents
 
 #safety settings for security research content
+#use BLOCK_ONLY_HIGH to allow CTI analysis, malware research, attack techniques
 SAFETY_SETTINGS = [
     types.SafetySetting(
         category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-        threshold=types.HarmBlockThreshold.BLOCK_HIGH_AND_ABOVE
+        threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH
     )
 ]
 
