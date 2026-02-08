@@ -25,6 +25,9 @@ from sigma_detection_agent.agent import (
     ttp_mapper_agent,
     sigma_generator_agent,
     sigma_formatter_agent,
+    payload_generator_agent,
+    payload_formatter_agent,
+    test_validator_agent,
     load_cti_files
 )
 
@@ -34,6 +37,7 @@ console = Console()
 CTI_ANALYSIS_ITERATIONS = 2  #refine CTI analysis 2 times
 TTP_MAPPING_ITERATIONS = 2   #refine TTP mapping 2 times
 SIGMA_GENERATION_ITERATIONS = 3  #refine Sigma rules 3 times
+PAYLOAD_GENERATION_ITERATIONS = 2  #refine test payloads 2 times
 
 #context management
 MAX_REFINEMENT_CHARS = 50000  #truncate outputs before refinement to save tokens
@@ -341,6 +345,110 @@ Output as structured SigmaRuleOutput JSON with validated YAML."""
         state['formatted_rules'] = formatted_output
         console.print("[green]✓ YAML Formatting complete[/green]")
 
+        # === STAGE 5: Test Payload Generation (2 iterations) ===
+        task5 = progress.add_task(
+            "[cyan]Test Payload Generation[/cyan]",
+            total=PAYLOAD_GENERATION_ITERATIONS
+        )
+
+        #extract rules for test generation
+        formatted_for_tests = truncate_for_refinement(formatted_output, max_chars=50000)
+
+        payload_query = f"""Generate comprehensive test payloads for each Sigma detection rule:
+
+Sigma Rules:
+{formatted_for_tests}
+
+For EACH rule, create 4 types of test payloads:
+1. **True Positive (TP):** Malicious activity that SHOULD trigger the rule
+2. **False Negative (FN):** Malicious activity that might EVADE the rule
+3. **False Positive (FP):** Benign activity that might FALSE ALARM
+4. **True Negative (TN):** Normal activity that should NOT trigger
+
+Requirements:
+- Match the log source schema from each rule (e.g., Windows Security, Sysmon, GCP audit logs)
+- Include all fields referenced in the detection logic
+- Make TP/FN scenarios realistic based on the threat described
+- Make FP/TN scenarios represent actual business operations
+
+Output as structured TestPayloadSet JSON."""
+
+        payload_output = await run_agent_with_iteration(
+            payload_generator_agent,
+            payload_query,
+            PAYLOAD_GENERATION_ITERATIONS,
+            "Payload Generator",
+            progress,
+            task5
+        )
+
+        state['test_payloads'] = payload_output
+        console.print("[green]✓ Test Payload Generation complete[/green]")
+
+        # === STAGE 6: Payload Formatting (1 iteration) ===
+        task6 = progress.add_task(
+            "[cyan]Payload Formatting[/cyan]",
+            total=1
+        )
+
+        payload_for_format = truncate_for_refinement(payload_output, max_chars=50000)
+
+        format_payload_query = f"""Format test payloads as valid JSON matching the log source schemas:
+
+Generated Payloads:
+{payload_for_format}
+
+Ensure:
+1. Valid JSON structure
+2. Correct log field names and data types
+3. Realistic field values (timestamps, IPs, usernames, etc.)
+4. Each payload is a complete, valid log entry
+
+Output as structured TestPayloadSet JSON."""
+
+        formatted_payloads = await run_agent_with_iteration(
+            payload_formatter_agent,
+            format_payload_query,
+            1,
+            "Payload Formatter",
+            progress,
+            task6
+        )
+
+        state['formatted_payloads'] = formatted_payloads
+        console.print("[green]✓ Payload Formatting complete[/green]")
+
+        # === STAGE 7: Payload Validation (1 iteration) ===
+        task7 = progress.add_task(
+            "[cyan]Payload Validation[/cyan]",
+            total=1
+        )
+
+        validation_query = f"""Validate test payloads against log source schemas:
+
+Formatted Payloads:
+{truncate_for_refinement(formatted_payloads, max_chars=50000)}
+
+Validate:
+1. Required fields are present
+2. Data types are correct
+3. Field values are realistic
+4. Log structure matches source schema
+
+Output as structured TestValidationOutput JSON."""
+
+        validation_output = await run_agent_with_iteration(
+            test_validator_agent,
+            validation_query,
+            1,
+            "Test Validator",
+            progress,
+            task7
+        )
+
+        state['test_validation'] = validation_output
+        console.print("[green]✓ Payload Validation complete[/green]")
+
     #save results (prune large outputs to reduce file size)
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True, parents=True)
@@ -396,6 +504,42 @@ Output as structured SigmaRuleOutput JSON with validated YAML."""
     except (json.JSONDecodeError, ValueError, KeyError) as e:
         console.print(f"[yellow]⚠ Could not save Sigma rules as files: {e}[/yellow]")
         console.print("[yellow]  Rules are available in session JSON file[/yellow]")
+
+    #parse and save test payloads as individual JSON files
+    try:
+        #extract JSON from ADK Event wrapper and parse
+        clean_payloads = extract_json_from_event(state.get('formatted_payloads', ''))
+        payloads_data = json.loads(clean_payloads) if isinstance(clean_payloads, str) else clean_payloads
+
+        if payloads_data and 'test_payloads' in payloads_data:
+            #create tests directory
+            tests_dir = output_path / 'tests'
+            tests_dir.mkdir(exist_ok=True)
+
+            #save test payloads organized by rule
+            for rule_test in payloads_data['test_payloads']:
+                rule_id = rule_test.get('rule_id', 'unknown')
+                safe_rule_id = "".join(c for c in rule_id if c.isalnum() or c in ('_', '-'))[:50]
+
+                #create directory for this rule's tests
+                rule_test_dir = tests_dir / safe_rule_id
+                rule_test_dir.mkdir(exist_ok=True)
+
+                #save each test type
+                for test_type in ['true_positive', 'false_negative', 'false_positive', 'true_negative']:
+                    payloads = rule_test.get(test_type, [])
+                    for idx, payload in enumerate(payloads, 1):
+                        test_file = rule_test_dir / f"{test_type}_{idx:02d}.json"
+                        with open(test_file, 'w') as f:
+                            json.dump(payload, f, indent=2)
+
+            #report success
+            test_count = sum(len(list(d.glob('*.json'))) for d in tests_dir.iterdir() if d.is_dir())
+            console.print(f"[green]✓ Saved {test_count} test payloads to {tests_dir}/[/green]")
+
+    except (json.JSONDecodeError, ValueError, KeyError, AttributeError) as e:
+        console.print(f"[yellow]⚠ Could not save test payloads as files: {e}[/yellow]")
+        console.print("[yellow]  Test payloads are available in session JSON file[/yellow]")
 
     return {
         'success': True,
