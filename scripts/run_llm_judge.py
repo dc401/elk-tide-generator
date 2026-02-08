@@ -432,6 +432,7 @@ def main():
         'rule_evaluations': evaluations
     }
 
+    output_file.parent.mkdir(exist_ok=True, parents=True)
     with open(output_file, 'w') as f:
         json.dump(output, f, indent=2)
 

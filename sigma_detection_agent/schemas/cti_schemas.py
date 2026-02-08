@@ -16,8 +16,8 @@ class TTPMapping(BaseModel):
     ttp_id: str = Field(..., description="MITRE ATT&CK ID like T1550.001")
     ttp_name: str = Field(..., description="technique name")
     tactic: str = Field(..., description="tactic like Credential Access")
-    description: str = Field(..., description="how technique applies to GCP")
-    gcp_relevance: str = Field(..., description="GCP-specific context")
+    description: str = Field(..., description="how technique manifests in target environment")
+    target_environment_context: str = Field(..., description="Platform-specific context from CTI (Windows/Linux/macOS/cloud/etc)")
     priority: str = Field(..., description="HIGH/MEDIUM/LOW")
     evidence: List[str] = Field(default_factory=list, description="quotes from CTI")
 
@@ -33,7 +33,8 @@ class CTIAnalysisOutput(BaseModel):
     objectives: List[str] = Field(default_factory=list, description="attacker goals")
     attack_vectors: List[str] = Field(default_factory=list)
     ttps: List[TTPMapping] = Field(default_factory=list)
-    gcp_services_targeted: List[str] = Field(default_factory=list)
+    target_platforms: List[str] = Field(default_factory=list, description="Platforms targeted (Windows/Linux/macOS/cloud providers/etc)")
+    services_targeted: List[str] = Field(default_factory=list, description="Services/products targeted based on CTI evidence")
     key_indicators: List[str] = Field(default_factory=list)
     research_references: List[str] = Field(
         default_factory=list,

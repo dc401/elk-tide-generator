@@ -3,16 +3,30 @@
 import json
 import shutil
 import os
+import sys
 from pathlib import Path
 from datetime import datetime
 
 #load quality report
-with open('generated/QUALITY_REPORT.json') as f:
-    quality_report = json.load(f)
+try:
+    with open('generated/QUALITY_REPORT.json') as f:
+        quality_report = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError) as e:
+    print(f"ERROR: Failed to load quality report: {e}")
+    sys.exit(1)
 
 #load integration test results
-with open('generated/INTEGRATION_TEST_RESULTS.json') as f:
-    test_results = json.load(f)
+try:
+    with open('generated/INTEGRATION_TEST_RESULTS.json') as f:
+        test_results = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError) as e:
+    print(f"ERROR: Failed to load integration test results: {e}")
+    sys.exit(1)
+
+#validate required fields
+if 'rule_evaluations' not in quality_report:
+    print("ERROR: Quality report missing 'rule_evaluations' field")
+    sys.exit(1)
 
 #filter rules that pass BOTH quality and integration thresholds
 passing_rules = []

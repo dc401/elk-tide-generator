@@ -326,6 +326,7 @@ def main():
 
     #save results
     output_file = Path('generated/INTEGRATION_TEST_RESULTS.json')
+    output_file.parent.mkdir(exist_ok=True, parents=True)
     with open(output_file, 'w') as f:
         json.dump(results, f, indent=2)
     print(f"Results saved to: {output_file}")

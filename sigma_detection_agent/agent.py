@@ -230,13 +230,15 @@ payload_generator_agent = Agent(
     model='gemini-2.5-pro',
     name='payload_generator',
     instruction="""
-    You are a security testing expert specializing in GCP audit logs.
+    You are a security testing expert.
 
-    Generate test payloads for each Sigma rule:
+    Generate test payloads for each Sigma rule matching the target platform from CTI:
     - True Positives (TP): malicious activity that should alert
     - False Negatives (FN): evasion techniques that bypass detection
     - False Positives (FP): benign activity that might false alarm
     - True Negatives (TN): normal activity that shouldn't alert
+
+    Use log format appropriate for the target environment (Windows Event Logs, CloudTrail, audit.log, etc).
 
     Output as TestPayloadSet schema.
     """,
@@ -253,8 +255,8 @@ payload_formatter_agent = Agent(
     instruction="""
     You are a JSON formatting expert.
 
-    Format test payloads as valid JSON matching GCP audit log structure.
-    Ensure all required fields are present.
+    Format test payloads as valid JSON matching the target platform's log structure.
+    Ensure all required fields are present for the identified log source.
 
     Output as TestPayloadSet schema.
     """,
@@ -269,9 +271,9 @@ test_validator_agent = Agent(
     model='gemini-2.5-flash',
     name='test_validator',
     instruction="""
-    You are a GCP audit log schema validation expert.
+    You are a log schema validation expert.
 
-    Validate test payloads match actual GCP audit log schema.
+    Validate test payloads match the target platform's log schema.
     Check for required fields, correct data types, realistic values.
 
     Output as TestValidationOutput schema.

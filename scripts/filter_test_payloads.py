@@ -2,12 +2,21 @@
 """filter test payloads for passing rules only"""
 import json
 import shutil
+import sys
 from pathlib import Path
 
 #load passing rule IDs
-with open('generated/PASSING_RULE_IDS.json') as f:
-    data = json.load(f)
-    passing_ids = set(data['rule_ids'])
+try:
+    with open('generated/PASSING_RULE_IDS.json') as f:
+        data = json.load(f)
+        passing_ids = set(data.get('rule_ids', []))
+except (FileNotFoundError, json.JSONDecodeError) as e:
+    print(f"ERROR: Failed to load passing rule IDs: {e}")
+    sys.exit(1)
+
+if not passing_ids:
+    print("WARNING: No passing rule IDs found")
+    sys.exit(0)
 
 #filter test directories
 tests_dir = Path('generated/tests')

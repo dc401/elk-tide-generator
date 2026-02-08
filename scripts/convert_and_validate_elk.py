@@ -291,6 +291,7 @@ def main():
                 'validated': True
             }
 
+    output_file.parent.mkdir(exist_ok=True, parents=True)
     with open(output_file, 'w') as f:
         json.dump(elk_queries, f, indent=2)
 
@@ -306,6 +307,7 @@ def main():
         'validations': validations
     }
 
+    validation_report_file.parent.mkdir(exist_ok=True, parents=True)
     with open(validation_report_file, 'w') as f:
         json.dump(validation_report, f, indent=2)
 

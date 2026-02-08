@@ -25,6 +25,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Clean Stale Artifacts
+        run: |
+          echo "Cleaning stale artifacts from previous runs..."
+
+          #remove backup folder (rejected rules accumulate here)
+          rm -rf generated/all_rules_backup
+          echo "✓ Removed all_rules_backup/"
+
+          #remove old session files from generated/
+          rm -f generated/iterative_session_*.json
+          echo "✓ Removed old session files from generated/"
+
+          #clean local session_results folder (not committed but may exist from manual runs)
+          rm -rf session_results/*
+          echo "✓ Cleaned session_results/"
+
+          #remove stale quality reports
+          rm -f generated/STATIC_QUALITY_REPORT.json
+          rm -f generated/PASSING_RULE_IDS.json
+          echo "✓ Removed old quality reports"
+
+          echo "Ready for fresh generation run"
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -45,15 +68,49 @@ jobs:
 
       - name: Check CTI Files
         run: |
-          echo "CTI files to process:"
-          find cti_src -type f \( -name "*.md" -o -name "*.txt" -o -name "*.pdf" -o -name "*.docx" \) -ls
-          FILE_COUNT=$(find cti_src -type f \( -name "*.md" -o -name "*.txt" -o -name "*.pdf" -o -name "*.docx" \) | wc -l)
-          echo "Total CTI files: $FILE_COUNT"
+          echo "Validating CTI files..."
 
+          #check for valid file extensions only
+          CTI_FILES=$(find cti_src -type f \( -name "*.md" -o -name "*.txt" -o -name "*.pdf" -o -name "*.docx" \))
+          FILE_COUNT=$(echo "$CTI_FILES" | grep -c . || echo 0)
+
+          echo "Found $FILE_COUNT CTI file(s)"
+
+          #validation checks
           if [ "$FILE_COUNT" -eq 0 ]; then
             echo "ERROR: No CTI files found in cti_src/"
             exit 1
           fi
+
+          #prevent DoS from too many files (max 50 files)
+          if [ "$FILE_COUNT" -gt 50 ]; then
+            echo "ERROR: Too many CTI files ($FILE_COUNT > 50)"
+            echo "Process files in batches to avoid quota exhaustion"
+            exit 1
+          fi
+
+          #check for suspicious file names
+          SUSPICIOUS_FILES=$(find cti_src -type f -name "*../*" -o -name "*.exe" -o -name "*.sh" -o -name "*.bat")
+          if [ -n "$SUSPICIOUS_FILES" ]; then
+            echo "ERROR: Suspicious files detected:"
+            echo "$SUSPICIOUS_FILES"
+            exit 1
+          fi
+
+          #check for overly large files (>50MB per file)
+          LARGE_FILES=$(find cti_src -type f -size +50M)
+          if [ -n "$LARGE_FILES" ]; then
+            echo "ERROR: Files exceed 50MB size limit:"
+            echo "$LARGE_FILES"
+            exit 1
+          fi
+
+          echo "✓ All CTI files validated"
+          echo "CTI files to process:"
+          echo "$CTI_FILES" | while read -r file; do
+            SIZE=$(du -h "$file" | cut -f1)
+            echo "  - $file ($SIZE)"
+          done
 
       - name: Generate Detection Rules
         env:
@@ -146,6 +203,10 @@ jobs:
             echo "Filtering test payloads for passing rules..."
             python3 scripts/filter_test_payloads.py
           fi
+
+          #cleanup backup folder (no longer needed)
+          rm -rf generated/all_rules_backup
+          echo "✓ Cleaned up rejected rules backup"
 
       - name: Commit Passing Rules
         if: steps.filter.outputs.passing_count > 0

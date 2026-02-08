@@ -21,6 +21,9 @@ session_results/*.json
 
 #generated files (keep in repo but ignore temp files)
 generated/**/*.tmp
+generated/all_rules_backup/
+generated/sigma_rules_filtered/
+generated/iterative_session_*.json
 staged_rules/pending_pr_*/
 
 #IDE
