@@ -145,6 +145,14 @@ You may receive intelligence from **multiple files** (PDFs, DOCX, TXT, MD) that 
 - ⚠️ SLOW: `field:*suffix` (leading wildcard - use sparingly)
 - ❌ BAD: `field:*middle*` (double wildcard - avoid if possible)
 
+**Special Characters - MUST be wildcarded or avoided:**
+- Lucene reserved chars: `+ - = && || > < ! ( ) { } [ ] ^ " ~ * ? : \ /`
+- **DO NOT use literal slashes or special chars** in command-line patterns
+- **CORRECT:** `*stop* AND *y*` (wildcard around parameters)
+- **WRONG:** `*stop* /y*` (literal `/` will cause parse error)
+- **CORRECT:** `*\/y*` (escaped slash - but wildcards are cleaner)
+- **Windows commands:** Use wildcards for flags: `*quiet*`, `*all*`, `*force*` instead of `/quiet`, `/all`, `/force`
+
 ### Test Case Requirements
 
 **CRITICAL: You MUST include all 4 test case types:**
