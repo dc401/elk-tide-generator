@@ -247,13 +247,15 @@ async def run_detection_agent(cti_dir: Path, output_dir: Path, project_id: str, 
     #step 5: save output
     print("\n[5/5] Saving detection rules...")
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+    rules_dir = output_dir / 'detection_rules'
+    rules_dir.mkdir(parents=True, exist_ok=True)
+
     for rule in validated_rules:
-        rule_file = output_dir / f"{rule.name.lower().replace(' ', '_')}.json"
+        rule_file = rules_dir / f"{rule.name.lower().replace(' ', '_')}.json"
         with open(rule_file, 'w') as f:
             json.dump(rule.model_dump(), f, indent=2)
         print(f"  ✓ Saved: {rule_file.name}")
-    
+
     #save CTI context
     context_file = output_dir / 'cti_context.json'
     with open(context_file, 'w') as f:
