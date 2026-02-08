@@ -54,25 +54,34 @@ jobs:
       - name: Stage Rules for Review
         if: steps.check.outputs.has_rules == 'true'
         run: |
-          echo "Staging rules for human review..."
+          echo "Staging rules for production deployment..."
 
-          #rules are already in generated/sigma_rules/ from previous workflow
-          #just need to commit them for PR
+          #copy rules from generated/sigma_rules/ to generated/production_rules/
+          #this creates a reviewable change: promoting rules to production folder
+          mkdir -p generated/production_rules
+
+          for rule_file in generated/sigma_rules/*.yml; do
+            if [ -f "$rule_file" ]; then
+              cp "$rule_file" generated/production_rules/
+              echo "Staged: $(basename $rule_file)"
+            fi
+          done
+
+          #also stage quality reports for reference
+          cp generated/STATIC_QUALITY_REPORT.json generated/production_rules/ 2>/dev/null || true
+          cp generated/INTEGRATION_TEST_RESULTS.json generated/production_rules/ 2>/dev/null || true
+          cp generated/ELK_VALIDATION_REPORT.json generated/production_rules/ 2>/dev/null || true
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add generated/sigma_rules/
-          git add generated/tests/ 2>/dev/null || true
-          git add generated/STATIC_QUALITY_REPORT.json 2>/dev/null || true
-          git add generated/INTEGRATION_TEST_RESULTS.json 2>/dev/null || true
-          git add generated/ELK_VALIDATION_REPORT.json 2>/dev/null || true
+          git add generated/production_rules/
 
-          git commit -m "Stage detection rules for human review
+          git commit -m "Promote detection rules to production
 
           Rules: ${{ steps.check.outputs.rule_count }} rules passed automated testing
           Quality: Static LLM judge + integration testing passed
-          
+
           Review checklist:
           - [ ] Verify detection logic aligns with threat intelligence
           - [ ] Check for false positive risks
