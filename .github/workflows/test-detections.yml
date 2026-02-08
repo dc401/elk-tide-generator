@@ -145,10 +145,14 @@ jobs:
           #install specific version (pinned for reproducibility)
           sudo apt-get install -y elasticsearch=8.12.0
 
-          #configure for testing (disable security for local testing)
-          echo "network.host: 0.0.0.0" | sudo tee -a /etc/elasticsearch/elasticsearch.yml
-          echo "xpack.security.enabled: false" | sudo tee -a /etc/elasticsearch/elasticsearch.yml
-          echo "discovery.type: single-node" | sudo tee -a /etc/elasticsearch/elasticsearch.yml
+          #configure for testing (use sed to replace, not append to avoid duplicates)
+          sudo sed -i 's/#network.host: .*/network.host: 0.0.0.0/' /etc/elasticsearch/elasticsearch.yml
+          sudo sed -i 's/xpack.security.enabled: .*/xpack.security.enabled: false/' /etc/elasticsearch/elasticsearch.yml
+
+          #add discovery type if not exists
+          if ! grep -q "discovery.type" /etc/elasticsearch/elasticsearch.yml; then
+            echo "discovery.type: single-node" | sudo tee -a /etc/elasticsearch/elasticsearch.yml
+          fi
 
           #set JVM heap size (512MB for GitHub runners)
           sudo sed -i 's/-Xms1g/-Xms512m/g' /etc/elasticsearch/jvm.options
