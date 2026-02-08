@@ -216,16 +216,24 @@ jobs:
 
           #commit passing rules + quality report
           git add generated/sigma_rules/
-          git add generated/tests/
-          git add generated/STATIC_QUALITY_REPORT.json
-          git add generated/PASSING_RULE_IDS.json
+
+          #add tests only if directory exists
+          if [ -d "generated/tests" ]; then
+            git add generated/tests/
+            echo "✓ Added test payloads"
+          else
+            echo "⚠️  No test payloads to commit (tests directory not generated)"
+          fi
+
+          git add generated/STATIC_QUALITY_REPORT.json 2>/dev/null || true
+          git add generated/PASSING_RULE_IDS.json 2>/dev/null || true
 
           #check if there are changes
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
             PASSING_COUNT="${{ steps.filter.outputs.passing_count }}"
-            TEST_COUNT=$(find generated/tests -name "*.json" 2>/dev/null | wc -l)
+            TEST_COUNT=$(find generated/tests -name "*.json" 2>/dev/null | wc -l || echo 0)
 
             git commit -m "ci: $PASSING_COUNT rules passed static LLM judge (threshold 0.65) [skip ci]"
             git push
