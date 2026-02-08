@@ -9,8 +9,6 @@ on:
     branches: [main]
     paths:
       - 'cti_src/**'  #trigger when CTI files change
-  schedule:
-    - cron: '0 0 * * 0'  #weekly on Sunday
 
 permissions:
   contents: write  #allow workflow to commit and push
@@ -226,6 +224,10 @@ jobs:
             TEST_COUNT=$(find generated/tests -name "*.json" 2>/dev/null | wc -l || echo 0)
 
             git commit -m "ci: $PASSING_COUNT rules passed static LLM judge (threshold 0.65) [skip ci]"
+
+            #pull and rebase in case remote was updated during workflow run
+            git pull --rebase || true
+
             git push
           fi
 
