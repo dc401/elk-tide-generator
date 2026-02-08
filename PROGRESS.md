@@ -45,9 +45,35 @@
 - akira_ransomware_-_service_stop_(t1489).yml
 - akira_ransomware_-_ransom_note_creation_(t1486).yml
 
+## Completed ✅ (Continued)
+
+### Validation Pipeline (Complete)
+- ✅ 3-stage validation before integration testing
+- ✅ Stage 1: Lucene syntax check (deterministic, fast-fail)
+- ✅ Stage 2: YAML → JSON conversion + linting
+- ✅ Stage 3: LLM schema validator with research
+- ✅ Added luqum parser for Lucene validation
+- ✅ Updated agent prompts with validation/research instructions
+- ✅ Verbose logging for CI debugging
+
+**Validation Flow:**
+```
+YAML Rule → Lucene Parse → JSON Convert → LLM Schema Check → Integration Test
+            (fast-fail)    (linting)     (research)         (empirical)
+```
+
+**Files Created:**
+- scripts/validate_rules.py - Full validation pipeline
+- scripts/cleanup_staging.sh - Clean staging artifacts
+
+**Folder Structure:**
+- generated/detection_rules/ - Final YAML (human review)
+- generated/staging/json/ - Temp JSON (validation only)
+- production_rules/json/ - Approved JSON (ES deployment)
+
 ## In Progress 🚧
 
-### Phase 2: Integration Testing + Empirical LLM Judge (READY FOR TESTING)
+### Phase 2: Integration Testing + Empirical LLM Judge (READY FOR END-TO-END TESTING)
 
 **Objectives:**
 1. Deploy ephemeral ELK stack in GitHub Actions
