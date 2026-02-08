@@ -1,651 +1,401 @@
-# Sigma Detection Agent - Automated SIEM Detection Engineering
+# Elasticsearch Detection Agent - Automated SIEM Detection Engineering
 
-Production-ready automated detection engineering solution that converts CTI intelligence → TTP-based Sigma detection rules with comprehensive testing and validation.
+Production-ready automated detection engineering solution that converts CTI intelligence → Elasticsearch Detection Rules with comprehensive multi-level validation and self-healing refinement.
 
 ## Features
 
-- **Universal Sigma Format:** Detection rules work with any SIEM (ELK, Splunk, Chronicle, Sentinel, QRadar)
-- **Automated Testing:** Unit tests (pySigma) + integration tests (ephemeral ELK)
-- **LLM Quality Judge:** Empirical evaluation based on actual test results
-- **Human-in-the-Loop:** Automated staging → PR → human review → deployment
+- **Native Elasticsearch Format:** Detection rules in Elasticsearch Detection API format (Lucene queries + ECS fields)
+- **Multi-Level Smart Refinement:** Auto-fixes rules at validation, integration test, and LLM judge stages
+- **Automated Testing:** 3-stage validation + integration testing with native Elasticsearch
+- **Empirical LLM Judge:** Quality evaluation based on actual SIEM test results
+- **YAML-First I/O:** All rules and outputs in YAML (easier for LLMs and humans)
+- **Security Hardened:** OWASP LLM Top 10 protection, input validation, output sanitization
 - **GitHub-Only Infrastructure:** No persistent cloud resources required
-- **Security Hardened:** Input validation, output sanitization, attack detection
 
 ## Architecture
 
 ```
-CTI Files → ADK Agent Pipeline → Sigma Rules + Test Payloads
+CTI Files → Detection Agent → Elasticsearch Detection Rules (YAML)
                                         ↓
-                    Unit Testing (pySigma validation)
+            STAGE 1: Validation (with auto-refinement)
+            ├─ Lucene syntax check
+            ├─ YAML → JSON conversion
+            └─ LLM schema validator (research-backed)
                                         ↓
-                    Integration Testing (ephemeral ELK)
+            STAGE 2: Integration Testing (with auto-refinement)
+            ├─ Deploy to native Elasticsearch
+            ├─ Ingest TP/FN/FP/TN test payloads
+            ├─ Calculate precision/recall metrics
+            └─ Smart decision: Fix QUERY or TEST CASES
                                         ↓
-                    LLM Judge Evaluation → Pass/Fail
+            STAGE 3: LLM Judge (with auto-refinement)
+            ├─ Empirical evaluation (actual test results)
+            ├─ Quality scoring (≥0.70 threshold)
+            └─ Deployment decision: APPROVE/REFINE/REJECT
                                         ↓
-                    Staged Rules → Human Review → Production
+                    Human Review → Production
 ```
 
 ## Prerequisites
 
 - Python 3.11+ (3.12 or 3.13 recommended)
-- GCP account with Vertex AI enabled
-- Docker (for local ELK testing)
+- GCP account with Vertex AI enabled (for Gemini API)
 - GitHub account (for CI/CD)
 - git CLI
 - gcloud CLI ([installation guide](https://cloud.google.com/sdk/docs/install))
 
-## Quick Setup (All Platforms)
+**Note:** Elasticsearch is installed automatically via native packages during integration testing (no Docker required).
+
+## Quick Setup
 
 ### Option 1: Automated Bootstrap (Recommended)
 
-The bootstrap script automates GCP and GitHub setup. Works on macOS, Linux, and Windows (Git Bash/WSL).
-
 ```bash
 #clone and navigate to project
+git clone https://github.com/yourusername/adk-tide-generator.git
 cd adk-tide-generator
 
-#run bootstrap (interactive - will prompt for inputs)
+#run interactive bootstrap
 chmod +x scripts/bootstrap.sh
 ./scripts/bootstrap.sh
 ```
 
-The script will:
-1. Create/use GCP project
-2. Enable Vertex AI APIs
-3. Create service account with minimal permissions
-4. Upload credentials to GitHub secrets
-5. Create .env file
-6. Test the setup
+The bootstrap script will:
+1. Set up Python virtual environment
+2. Install dependencies
+3. Configure GCP credentials
+4. Set up GitHub secrets
+5. Validate the installation
 
-**Note:** On Windows, use Git Bash or WSL to run the script.
-
-### Option 2: Manual Setup (Cross-Platform)
-
-#### Step 1: Clone Repository
+### Option 2: Manual Setup
 
 ```bash
-#clone repo
-cd adk-tide-generator
-```
-
-#### Step 2: Create Virtual Environment
-
-**macOS/Linux:**
-```bash
-#create venv
-python3 -m venv venv
-
-#activate venv
-source venv/bin/activate
-
-#upgrade pip
-pip install --upgrade pip
-
-#install dependencies
-pip install -r requirements.txt
-```
-
-**Windows (PowerShell):**
-```powershell
-#create venv
-python -m venv venv
-
-#activate venv
-.\venv\Scripts\Activate.ps1
-
-#if you get execution policy error, run:
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-
-#upgrade pip
-python -m pip install --upgrade pip
-
-#install dependencies
-pip install -r requirements.txt
-```
-
-**Windows (Command Prompt):**
-```cmd
-REM create venv
-python -m venv venv
-
-REM activate venv
-venv\Scripts\activate.bat
-
-REM upgrade pip
-python -m pip install --upgrade pip
-
-REM install dependencies
-pip install -r requirements.txt
-```
-
-#### Step 3: Verify Installation
-
-**All platforms:**
-```bash
-#test CTI loading (validates Phase 1)
-python run_agent.py --test-cti
-```
-
-Expected output:
-```
-✓ CTI loading successful!
-Phase 1 (Foundation) validation: PASSED
-```
-
-## GCP Setup Instructions
-
-### 1. Create GCP Project
-
-```bash
-#set project ID
-export PROJECT_ID="your-detection-engineering-project"
-
-#create project
-gcloud projects create $PROJECT_ID --name="Detection Engineering"
-
-#set as active project
-gcloud config set project $PROJECT_ID
-
-#enable billing (required for Vertex AI)
-#visit: https://console.cloud.google.com/billing
-```
-
-### 2. Enable Required APIs
-
-```bash
-#enable Vertex AI API
-gcloud services enable aiplatform.googleapis.com
-
-#enable Generative AI API
-gcloud services enable generativelanguage.googleapis.com
-
-#enable IAM API
-gcloud services enable iam.googleapis.com
-
-#verify APIs enabled
-gcloud services list --enabled | grep -E "(aiplatform|generativelanguage)"
-```
-
-### 3. Create Service Account
-
-```bash
-#create service account
-gcloud iam service-accounts create sigma-detection-agent \
-    --display-name="Sigma Detection Agent" \
-    --description="Service account for automated detection engineering"
-
-#get service account email
-export SA_EMAIL="sigma-detection-agent@${PROJECT_ID}.iam.gserviceaccount.com"
-
-#grant required permissions
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-    --member="serviceAccount:${SA_EMAIL}" \
-    --role="roles/aiplatform.user"
-
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-    --member="serviceAccount:${SA_EMAIL}" \
-    --role="roles/generativelanguage.user"
-
-#create and download key
-gcloud iam service-accounts keys create ~/sigma-detection-sa-key.json \
-    --iam-account=$SA_EMAIL
-
-#secure the key file
-chmod 600 ~/sigma-detection-sa-key.json
-
-echo "Service account key saved to: ~/sigma-detection-sa-key.json"
-```
-
-### 4. Verify Permissions
-
-```bash
-#check service account permissions
-gcloud projects get-iam-policy $PROJECT_ID \
-    --flatten="bindings[].members" \
-    --filter="bindings.members:serviceAccount:${SA_EMAIL}"
-
-#expected output should include:
-# - roles/aiplatform.user
-# - roles/generativelanguage.user
-```
-
-### 5. Set Quota Limits (Important for Free Tier)
-
-Visit [GCP Quotas Page](https://console.cloud.google.com/iam-admin/quotas) and verify:
-
-- **Gemini Pro (2.5):** 2 requests/minute (default)
-- **Gemini Flash (2.5):** 10 requests/minute (default)
-- **Total tokens:** 1M context window per request
-
-Our agent uses aggressive throttling to stay well below these limits.
-
-## Installation
-
-### 1. Clone Repository
-
-```bash
-git clone <your-repo>
-cd chapter-16
-```
-
-### 2. Create Virtual Environment
-
-```bash
+#1. create virtual environment
 python3.11 -m venv venv
-source venv/bin/activate  #on macOS/Linux
-#venv\Scripts\activate  #on Windows
-```
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-### 3. Install Dependencies
-
-```bash
+#2. install dependencies
+pip install --upgrade pip
 pip install -r requirements.txt
 
-#verify installation
-python -c "import google.genai; import pysigma; print('Dependencies OK')"
-```
+#3. configure GCP
+export GOOGLE_CLOUD_PROJECT="your-project-id"
+gcloud auth application-default login
 
-### 4. Configure Environment
+#4. add CTI files
+mkdir -p cti_src
+cp your-threat-intel.pdf cti_src/
 
-```bash
-#copy example env file
-cp .env.example .env
-
-#edit .env with your values
-nano .env
-```
-
-**Required .env values:**
-
-```bash
-#GCP configuration
-GOOGLE_CLOUD_PROJECT=your-project-id
-GOOGLE_CLOUD_LOCATION=us-central1
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/sigma-detection-sa-key.json
-
-#use Vertex AI (required)
-GOOGLE_GENAI_USE_VERTEXAI=true
-```
-
-### 5. Verify GCP Authentication
-
-```bash
-#test authentication
-python -c "
-from google.genai import Client
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-client = Client(
-    vertexai=True,
-    project=os.getenv('GOOGLE_CLOUD_PROJECT'),
-    location=os.getenv('GOOGLE_CLOUD_LOCATION')
-)
-
-response = client.models.generate_content(
-    model='gemini-2.5-flash',
-    contents='Say hello'
-)
-
-print('Authentication successful!')
-print(response.text)
-"
-```
-
-Expected output: `Hello!` or similar greeting
-
-## Testing the Setup
-
-After running bootstrap scripts, validate everything works:
-
-```bash
-#activate virtual environment
-source venv/bin/activate
-
-#test CTI loading (Phase 1 validation)
+#5. test CTI loading
 python run_agent.py --test-cti
 
-#expected output:
-# Loading CTI files from: cti_src
-# Loaded 1 CTI files (~XXX tokens)
-# ✓ CTI loading successful!
-# Phase 1 (Foundation) validation: PASSED
-```
-
-## Working with CTI Files
-
-### 1. Add CTI Files
-
-Place your threat intelligence files in the CTI source folder:
-
-```bash
-#create sample CTI file
-cat > cti_src/sample-threat.md << 'EOF'
-# GCP IAM Privilege Escalation Campaign
-
-## Threat Actor
-APT-Cloud-Hunter - sophisticated threat actor targeting cloud environments
-
-## Attack Chain
-1. Initial access via compromised service account credentials
-2. Reconnaissance of IAM policies and service accounts
-3. Privilege escalation using service account impersonation
-4. Lateral movement to high-value GCP projects
-5. Data exfiltration from Cloud Storage and BigQuery
-
-## TTPs
-- T1550.001: Use Alternate Authentication Material (Service Account Tokens)
-- T1078.004: Valid Accounts (Cloud Accounts)
-- T1087.004: Account Discovery (Cloud Account)
-
-## Indicators
-- Unusual GenerateAccessToken API calls from external users
-- Service account impersonation from non-service principals
-- Multiple failed IAM policy modifications
-EOF
-```
-
-### 2. Run Agent (Coming in Phase 2)
-
-```bash
-#interactive mode
+#6. generate detection rules
 python run_agent.py --interactive
-
-#automated mode
-python run_agent.py --mode all --output-dir generated/
 ```
 
-### 3. Review Generated Rules
+## Usage
+
+### Interactive Mode (Local)
 
 ```bash
-#view generated sigma rules
-ls generated/sigma_rules/
-
-#view test payloads
-ls generated/tests/
-
-#check quality report
-cat session_results/latest_quality_report.json
+python run_agent.py --interactive
 ```
 
-## Testing
+Prompts you for:
+- CTI folder location
+- Output directory
+- GCP project ID
+- Confirmation before generation
 
-### Unit Tests (Fast - Seconds)
+### Non-Interactive Mode (CI/CD)
 
 ```bash
-#test pydantic schemas
-python -c "
-from sigma_detection_agent.schemas import SigmaRule, CTIAnalysisOutput
-print('Schemas imported successfully')
-"
-
-#test CTI loader
-python -c "
-from sigma_detection_agent.tools import load_cti_files
-result = load_cti_files('cti_src')
-print(f'Loaded {result[\"files_loaded\"]} files')
-"
+python run_agent.py \
+  --cti-folder cti_src \
+  --output generated \
+  --project YOUR_GCP_PROJECT
 ```
 
-### Integration Tests (Requires Docker)
+### With Self-Healing Refinement (Default)
 
 ```bash
-#coming in Phase 5
-python scripts/integration_test_elk.py
+#refinement enabled by default (max 3 iterations if 0 rules pass)
+python run_agent.py --cti-folder cti_src --output generated
 ```
+
+### Disable Refinement (for testing)
+
+```bash
+python run_agent.py --cti-folder cti_src --output generated --no-refinement
+```
+
+## Validation & Testing
+
+### Stage 1: Pre-Integration Validation
+
+```bash
+python scripts/validate_rules.py \
+  --rules-dir generated/detection_rules \
+  --staging-dir generated/staging \
+  --project YOUR_GCP_PROJECT
+```
+
+Validates:
+- Lucene syntax (deterministic)
+- YAML → JSON conversion
+- LLM schema validation (research-backed)
+
+Auto-refines up to 2 times per rule if failures occur.
+
+### Stage 2: Integration Testing
+
+```bash
+python scripts/integration_test_ci.py \
+  --rules-dir generated/detection_rules \
+  --project YOUR_GCP_PROJECT
+```
+
+Tests:
+- Deploys rules to native Elasticsearch
+- Ingests TP/FN/FP/TN test payloads
+- Calculates precision/recall
+- Smart decision: Fix query OR test cases
+
+Requires:
+- Precision ≥ 0.80 (max 20% false positives)
+- Recall ≥ 0.70 (catch at least 70% of attacks)
+
+### Stage 3: LLM Judge Evaluation
+
+```bash
+python scripts/run_llm_judge.py \
+  --rules-dir generated/detection_rules \
+  --test-results integration_test_results.yml \
+  --project YOUR_GCP_PROJECT
+```
+
+Evaluates:
+- Quality score based on actual test results
+- Deployment recommendation (APPROVE/REFINE/REJECT)
+- Refines based on judge feedback if needed
+
+## Multi-Level Refinement System
+
+The system automatically refines rules at each failure stage:
+
+### Validation Refinement
+- **Trigger:** Lucene syntax errors, schema violations
+- **Fix:** Corrects operators, ECS field names, MITRE references
+- **Attempts:** Max 2 per rule
+
+### Integration Test Refinement
+- **Trigger:** Precision < 0.80 or Recall < 0.70
+- **Smart Decision:** Analyzes if QUERY or TEST CASES need fixing
+- **Fix:** Refines query logic OR updates test payloads
+- **Attempts:** Max 2 per rule
+
+### Judge Refinement
+- **Trigger:** Deployment decision = REFINE
+- **Fix:** Applies judge's specific recommendations
+- **Attempts:** Max 2 per rule
+
+See [MULTI_LEVEL_REFINEMENT.md](MULTI_LEVEL_REFINEMENT.md) for detailed documentation.
 
 ## Project Structure
 
 ```
-.
-├── cti_src/                        #CTI input files (user places here)
-│   ├── *.pdf, *.txt, *.md, *.docx  #threat intelligence sources
+adk-tide-generator/
+├── detection_agent/               #core detection generation logic
+│   ├── agent.py                   #main detection agent (5 stages)
+│   ├── refinement.py              #pipeline-level refinement wrapper
+│   ├── per_rule_refinement.py     #granular per-rule refinement
+│   ├── prompts/                   #LLM prompts (external files)
+│   │   ├── security_guard.md      #OWASP LLM Top 10 protection
+│   │   ├── detection_generator.md #rule generation with research
+│   │   ├── validator.md           #rule validation with research
+│   │   └── evaluator.md           #test case generation
+│   ├── schemas/                   #Pydantic schemas
+│   │   └── detection_rule.py      #ES Detection Rule schema
+│   └── tools/                     #custom tools
+│       └── load_cti_files.py      #CTI file loader (PDF/DOCX/TXT/MD)
 │
-├── sigma_detection_agent/          #main agent package
-│   ├── agent.py                    #root agent + workflows
-│   ├── prompts/                    #external prompt files
-│   ├── schemas/                    #pydantic models
-│   └── tools/                      #custom tools
+├── scripts/                       #validation and testing scripts
+│   ├── bootstrap.sh               #interactive setup script
+│   ├── validate_rules.py          #3-stage validation with refinement
+│   ├── integration_test_ci.py     #ES integration testing with refinement
+│   ├── run_llm_judge.py           #empirical LLM judge with refinement
+│   ├── cleanup_staging.sh         #clean temp artifacts
+│   ├── setup-gcp.sh               #GCP setup helper
+│   └── setup-github-secrets.sh    #GitHub secrets helper
 │
-├── generated/                      #agent output (draft rules)
-│   ├── sigma_rules/                #generated sigma YAML
-│   ├── tests/                      #test payloads (TP/FN/FP/TN)
-│   └── .github/workflows/          #auto-generated CI/CD
+├── .github/workflows/             #CI/CD workflows
+│   └── generate-detections.yml    #main workflow (CTI → rules)
 │
-├── staged_rules/                   #rules that PASSED LLM judge
-│   ├── *.yml                       #staged rules with UID
-│   ├── *_metadata.json             #quality scores + metrics
-│   └── tests/                      #test payloads for staged rules
+├── cti_src/                       #CTI input files
+│   └── sample_cti.md              #example CTI file
 │
-├── production_rules/               #human-approved rules
-│   └── *.yml                       #deployed to SIEM
+├── generated/                     #agent outputs
+│   ├── detection_rules/           #generated YAML rules
+│   ├── cti_context.yml            #CTI analysis context
+│   └── staging/                   #temp validation artifacts (gitignored)
 │
-├── scripts/                        #testing automation
-│   ├── unit_test_sigma.py
-│   ├── integration_test_elk.py
-│   ├── run_llm_judge.py
-│   └── stage_passing_rules.py
-│
-├── docker/                         #ELK stack for integration testing
-│   └── docker-compose.yml
-│
-└── .github/workflows/              #CI/CD workflows
-    ├── generate-detections.yml
-    ├── test-detections.yml
-    └── mock-deploy.yml
+├── run_agent.py                   #CLI entry point
+├── requirements.txt               #Python dependencies
+├── PROGRESS.md                    #development progress tracking
+├── TESTING_GUIDE.md               #testing documentation
+└── MULTI_LEVEL_REFINEMENT.md      #refinement system docs
 ```
 
-## Workflow: CTI → Production Detections
+## GitHub Actions Workflow
 
-1. **Generate Rules:** Place CTI files → run agent → generates Sigma rules + tests
-2. **Unit Testing:** pySigma validates syntax, logic, MITRE mappings
-3. **Integration Testing:** Ephemeral ELK deploys rules, ingests test data, measures results
-4. **LLM Judge:** Evaluates rules based on actual metrics (precision ≥ 0.80, recall ≥ 0.70)
-5. **Staging:** Passing rules → `staged_rules/` → auto-create PR
-6. **Human Review:** Security engineer reviews PR, checks quality report
-7. **Approval:** Merge PR → mock deployment → `production_rules/`
-8. **SIEM Deploy:** Convert Sigma → your SIEM format, deploy to production
+The main workflow (`.github/workflows/generate-detections.yml`) triggers on:
+- Manual dispatch
+- Push to `main` with CTI changes in `cti_src/`
+
+Workflow steps:
+1. Clean stale artifacts
+2. Install dependencies
+3. Authenticate to GCP
+4. Check CTI files (security validation)
+5. Run detection agent with refinement
+6. Verify rule generation
+7. Commit generated rules back to repo
 
 ## Security Features
 
-- **Input Validation:** File size limits, path traversal protection, allowed file types
-- **Content Sanitization:** Strips prompt injection patterns from CTI files
-- **Output Validation:** Detects malicious/nonsensical Sigma rules, stops build on critical issues
-- **Rate Limiting:** Aggressive throttling (3s delays) to prevent GCP quota exhaustion
-- **Attack Detection:** Monitors for overly broad rules (DoS risk), prompt injection artifacts
+### OWASP LLM Top 10 Protection
+- Scans CTI for prompt injection patterns
+- Blocks jailbreak attempts
+- Detects data poisoning
+- Validates output for manipulation
+
+### Input Validation
+- File size limits (max 50MB per file)
+- Path traversal prevention
+- Allowed file extensions only (.pdf, .txt, .md, .docx)
+- Suspicious filename detection
+
+### Output Sanitization
+- Removes injection patterns from generated rules
+- Validates Lucene syntax before writing
+- Schema validation with research grounding
+
+## Cost Optimization
+
+### Model Selection
+- **Gemini 2.5 Flash:** Rule generation (fast, cheap)
+- **Gemini 2.5 Pro:** Validation and judging (accurate)
+
+### Quota Management
+- Inter-agent delay: 3.0s
+- Aggressive retry backoff
+- Session-level retry with exponential backoff
+- Max 3 pipeline iterations if 0 rules pass
+
+### Token Efficiency
+- External prompts (no inline repetition)
+- Truncated outputs (120k char limit)
+- State pruning between stages
+
+## Testing
+
+### Unit Tests
+```bash
+#test CTI loading
+python run_agent.py --test-cti
+
+#test validation only
+python scripts/validate_rules.py --rules-dir generated/detection_rules
+```
+
+### Integration Tests
+```bash
+#test with native Elasticsearch
+python scripts/integration_test_ci.py \
+  --rules-dir generated/detection_rules \
+  --skip-install  #if ES already installed
+```
+
+### End-to-End Test
+```bash
+#complete pipeline
+python run_agent.py --cti-folder cti_src --output generated
+python scripts/validate_rules.py --rules-dir generated/detection_rules
+python scripts/integration_test_ci.py --rules-dir generated/detection_rules
+python scripts/run_llm_judge.py --rules-dir generated/detection_rules
+```
 
 ## Troubleshooting
 
-### "ResourceExhausted: 429 Quota exceeded"
-
-**Cause:** Hit Gemini API rate limits (2 RPM for Pro, 10 RPM for Flash)
-
-**Fix:**
+### GCP Authentication Errors
 ```bash
-#agent has built-in exponential backoff, just wait
-#or reduce CTI file count/size
-
-#check current quotas
-gcloud services list --enabled | grep aiplatform
-```
-
-### "Authentication failed"
-
-**Cause:** Invalid service account key or permissions
-
-**Fix:**
-```bash
-#verify credentials file exists
-ls -l $GOOGLE_APPLICATION_CREDENTIALS
-
 #re-authenticate
 gcloud auth application-default login
 
-#verify service account has correct roles
-gcloud projects get-iam-policy $GOOGLE_CLOUD_PROJECT \
-    --flatten="bindings[].members" \
-    --filter="bindings.members:serviceAccount"
+#verify project
+gcloud config get-value project
 ```
 
-### "CTI folder not found"
-
-**Cause:** No CTI files in `cti_src/`
-
-**Fix:**
+### Quota Exhaustion
 ```bash
-#place CTI files in correct location
-ls cti_src/
+#check quota usage
+gcloud alpha services quota list \
+  --service=aiplatform.googleapis.com \
+  --filter="metric.type:aiplatform.googleapis.com/quota/generate_content_requests_per_minute_per_project_per_region"
 
-#supported formats: .txt, .md, .pdf, .docx
+#increase delay between agents (edit detection_agent/agent.py)
+INTER_AGENT_DELAY = 5.0  # increase from 3.0
 ```
 
-### "ModuleNotFoundError: No module named 'google_adk'" or "google.adk"
-
-**Cause:** Incorrect venv setup or wrong import path
-
-**Fix:**
-
-**1. Verify you're in the venv:**
+### Rule Generation Failures
 ```bash
-#macOS/Linux
-which python  #should show path to venv/bin/python
+#enable verbose logging
+export PYTHONUNBUFFERED=1
+python run_agent.py --interactive
 
-#Windows
-where python  #should show path to venv\Scripts\python.exe
+#disable refinement for debugging
+python run_agent.py --interactive --no-refinement
 ```
 
-**2. Check if google-adk is installed:**
+### Integration Test Failures
 ```bash
-pip list | grep google-adk
+#check Elasticsearch status
+curl http://localhost:9200/_cluster/health
+
+#manually restart ES
+sudo systemctl restart elasticsearch
 ```
 
-**3. If not installed, reinstall:**
-```bash
-pip install -r requirements.txt
-```
+## Documentation
 
-**4. If project directory itself became a venv (has bin/, lib/, pyvenv.cfg):**
-```bash
-#deactivate if in venv
-deactivate  #or close terminal
-
-#remove venv files from project root
-rm -rf bin/ lib/ include/ pyvenv.cfg share/
-
-#create proper nested venv
-python3 -m venv venv
-
-#activate it
-source venv/bin/activate  #macOS/Linux
-#or
-.\venv\Scripts\Activate.ps1  #Windows PowerShell
-
-#install dependencies
-pip install -r requirements.txt
-```
-
-### Windows-Specific Issues
-
-**PowerShell Execution Policy Error:**
-```powershell
-#if you get "cannot be loaded because running scripts is disabled"
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-
-#then retry activation
-.\venv\Scripts\Activate.ps1
-```
-
-**Git Bash path issues:**
-```bash
-#if paths don't work in Git Bash, use forward slashes
-python run_agent.py --test-cti
-
-#or use winpty for interactive scripts
-winpty ./scripts/bootstrap.sh
-```
-
-**Windows Terminal vs Command Prompt:**
-- Prefer Windows Terminal or PowerShell for better Unicode support
-- Command Prompt may not render progress indicators correctly
-
-### macOS-Specific Issues
-
-**Python version conflicts:**
-```bash
-#if you have multiple Python versions
-python3 --version  #should be 3.11+
-
-#explicitly use python3.11, 3.12, or 3.13
-python3.13 -m venv venv
-```
-
-**Xcode Command Line Tools (if missing):**
-```bash
-#required for some dependencies
-xcode-select --install
-```
-
-### Linux-Specific Issues
-
-**Missing Python venv module:**
-```bash
-#ubuntu/debian
-sudo apt-get install python3-venv python3-dev
-
-#fedora/rhel
-sudo dnf install python3-devel
-
-#arch
-sudo pacman -S python-virtualenv
-```
-
-**Permission denied on scripts:**
-```bash
-#make bootstrap script executable
-chmod +x scripts/bootstrap.sh
-```
-
-## Development Roadmap
-
-- [x] **Phase 1:** Foundation (schemas, CTI loading)
-- [ ] **Phase 2:** Sigma generation (CTI → Sigma rules)
-- [ ] **Phase 3:** Test generation (TP/FN/FP/TN payloads)
-- [ ] **Phase 4:** Unit testing (pySigma validation)
-- [ ] **Phase 5:** ELK integration (ephemeral testing)
-- [ ] **Phase 6:** LLM judge (quality evaluation)
-- [ ] **Phase 7:** CI/CD (GitHub Actions)
-- [ ] **Phase 8:** CLI & polish
-- [ ] **Phase 9:** Documentation
-- [ ] **Phase 10:** Final testing
-
-Current status: **Phase 1 in progress** (see RUNNING_NOTES.md)
+- [PROGRESS.md](PROGRESS.md) - Development progress and status
+- [TESTING_GUIDE.md](TESTING_GUIDE.md) - Comprehensive testing procedures
+- [MULTI_LEVEL_REFINEMENT.md](MULTI_LEVEL_REFINEMENT.md) - Refinement system architecture
+- [ARCHITECTURE_ELASTICSEARCH_NATIVE.md](ARCHITECTURE_ELASTICSEARCH_NATIVE.md) - Technical architecture details
 
 ## Contributing
 
-This is a reference implementation for Chapter 16. For production use:
-
-1. Customize prompts for your threat model
-2. Adjust quality thresholds (precision/recall)
-3. Add SIEM-specific converters (Splunk SPL, Chronicle YARA-L, etc.)
-4. Implement persistent SIEM deployment (replace mock_deploy.py)
-
-## References
-
-- **Sigma Rules:** https://github.com/SigmaHQ/sigma
-- **pySigma:** https://github.com/SigmaHQ/pySigma
-- **Gemini API:** https://ai.google.dev/gemini-api/docs
-- **MITRE ATT&CK:** https://attack.mitre.org/
-- **GCP Audit Logs:** https://cloud.google.com/logging/docs/audit
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly (unit + integration)
+5. Submit a pull request
 
 ## License
 
-MIT License - see LICENSE file
+MIT License - See LICENSE file for details
 
 ## Support
 
-For issues or questions:
-- Create GitHub issue
-- Review RUNNING_NOTES.md for implementation status
-- Check troubleshooting section above
+For issues and questions:
+- GitHub Issues: https://github.com/yourusername/adk-tide-generator/issues
+- Documentation: See docs/ folder
+
+## Acknowledgments
+
+Built with:
+- Google Gemini 2.5 (Flash & Pro) via Vertex AI
+- Elasticsearch Detection Rule API
+- ECS (Elastic Common Schema)
+- luqum (Lucene query parser)
+- Pydantic (schema validation)

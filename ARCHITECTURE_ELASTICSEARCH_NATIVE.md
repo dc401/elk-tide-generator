@@ -415,11 +415,12 @@ jobs:
     steps:
       - name: Deploy to Ephemeral ES
         run: |
-          # Start test ES instance
-          docker run -d -p 9200:9200 elasticsearch:8.12.0
-          
+          # Start native ES instance (via apt)
+          python scripts/integration_test_ci.py \
+            --rules-dir staged_rules/
+
           # Deploy detection rules
-          python scripts/deploy_detections.py \
+          python scripts/mock_deploy.py \
             --source staged_rules/ \
             --es-url http://localhost:9200
           
