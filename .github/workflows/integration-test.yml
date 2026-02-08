@@ -112,7 +112,7 @@ jobs:
           fi
 
           #parse YAML results using python
-          python3 - <<'EOF' >> $GITHUB_OUTPUT
+          python3 - <<'PYEOF' >> $GITHUB_OUTPUT
 import yaml
 with open('integration_test_results.yml') as f:
     results = yaml.safe_load(f)
@@ -122,7 +122,7 @@ print(f"rules_passed={summary.get('rules_passed', 0)}")
 print(f"rules_failed={summary.get('rules_failed', 0)}")
 print(f"rules_refined={summary.get('rules_refined', 0)}")
 print(f"test_status={'PASSED' if summary.get('rules_failed', 0) == 0 else 'FAILED'}")
-EOF
+PYEOF
 
       - name: Generate Test Report
         if: always()
