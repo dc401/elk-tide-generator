@@ -218,8 +218,24 @@ async def run_detection_agent(cti_dir: Path, output_dir: Path, project_id: str, 
         temperature=0.3,
         tools=[types.Tool(google_search=types.GoogleSearch())]
     )
-    
-    rule_output = DetectionRuleOutput(**safe_json_parse(gen_response))
+
+    #parse and validate response
+    parsed_response = safe_json_parse(gen_response)
+
+    #check if response has required fields
+    if 'rules' not in parsed_response:
+        print(f"  ✗ LLM response missing 'rules' field")
+        print(f"  Response keys: {list(parsed_response.keys())}")
+        raise ValueError("Invalid LLM response format: missing 'rules' field")
+
+    if 'cti_context' not in parsed_response:
+        print(f"  ⚠️  LLM response missing 'cti_context', adding default")
+        parsed_response['cti_context'] = {
+            'source': 'cti_src',
+            'analyzed': datetime.now().isoformat()
+        }
+
+    rule_output = DetectionRuleOutput(**parsed_response)
     print(f"  ✓ Generated {rule_output.total_rules} detection rules")
     
     #step 4: validate rules
