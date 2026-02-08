@@ -1,0 +1,19 @@
+{
+  "payload_type": "TP",
+  "description": "Akira ransomware uses vssadmin.exe from a suspicious temp location to delete all shadow copies quietly.",
+  "log_entry": {
+    "EventID": 1,
+    "UtcTime": "2024-07-29 11:15:30.543",
+    "ProcessGuid": "{a4a8b0c1-5e4f-65b3-1111-0010c8e9ab01}",
+    "ProcessId": 5120,
+    "Image": "C:\\Windows\\System32\\vssadmin.exe",
+    "CommandLine": "vssadmin.exe delete shadows /all /quiet",
+    "User": "NT AUTHORITY\\SYSTEM",
+    "ParentProcessGuid": "{a4a8b0c1-5e4f-65b3-0000-0010a7d4aa01}",
+    "ParentProcessId": 4872,
+    "ParentImage": "C:\\Users\\victim\\AppData\\Local\\Temp\\runner.exe",
+    "ParentCommandLine": "C:\\Users\\victim\\AppData\\Local\\Temp\\runner.exe -cleanup"
+  },
+  "expected_alert": true,
+  "timestamp": "2024-07-29T11:15:30.543Z"
+}

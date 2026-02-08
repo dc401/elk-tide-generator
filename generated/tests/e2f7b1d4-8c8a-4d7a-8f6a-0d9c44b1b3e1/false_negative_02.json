@@ -1,0 +1,20 @@
+{
+  "payload_type": "FN",
+  "description": "Attacker renames vssadmin.exe to a benign name like 'updater.exe' to bypass process name-based detections.",
+  "log_entry": {
+    "EventID": 1,
+    "UtcTime": "2024-07-29 11:19:01.305",
+    "ProcessGuid": "{a4a8b0c1-5e4f-65b3-8888-0010f7e6ad08}",
+    "ProcessId": 5421,
+    "Image": "C:\\Users\\victim\\AppData\\Local\\Temp\\updater.exe",
+    "CommandLine": "C:\\Users\\victim\\AppData\\Local\\Temp\\updater.exe delete shadows /all",
+    "User": "WORKSTATION1\\victim",
+    "ParentProcessGuid": "{a4a8b0c1-5e4f-65b3-9999-0010a7d4aa09}",
+    "ParentProcessId": 4872,
+    "ParentImage": "C:\\Windows\\System32\\cmd.exe",
+    "ParentCommandLine": "cmd.exe"
+  },
+  "expected_alert": false,
+  "evasion_technique": "The rule detects on 'process.name' being 'vssadmin.exe', 'wmic.exe', or 'bcdedit.exe'. By renaming the binary, the 'Image' field no longer matches the rule's selection criteria.",
+  "timestamp": "2024-07-29T11:19:01.305Z"
+}

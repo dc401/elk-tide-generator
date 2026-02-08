@@ -1,0 +1,20 @@
+{
+  "payload_type": "TN",
+  "description": "An administrator lists existing shadow copies using vssadmin for diagnostic purposes, which is a benign read-only operation.",
+  "log_entry": {
+    "EventID": 1,
+    "UtcTime": "2024-07-29 14:30:05.100",
+    "ProcessGuid": "{c6cae2d3-7a6b-67d5-eeee-0010b9c0cd03}",
+    "ProcessId": 6012,
+    "Image": "C:\\Windows\\System32\\vssadmin.exe",
+    "CommandLine": "vssadmin list shadows",
+    "User": "CONTOSO\\admin",
+    "ParentProcessGuid": "{c6cae2d3-7a6b-67d5-ffff-0010a9b8cc03}",
+    "ParentProcessId": 5900,
+    "ParentImage": "C:\\Windows\\System32\\cmd.exe",
+    "ParentCommandLine": "C:\\Windows\\system32\\cmd.exe"
+  },
+  "expected_alert": false,
+  "legitimate_scenario": "This is a benign command for system administration and does not contain the malicious keywords ('delete shadows', 'recoveryenabled no', etc.) that the rule is looking for.",
+  "timestamp": "2024-07-29T14:30:05.100Z"
+}
