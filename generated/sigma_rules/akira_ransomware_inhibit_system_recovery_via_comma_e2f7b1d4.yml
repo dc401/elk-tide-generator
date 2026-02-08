@@ -23,7 +23,7 @@ detection:
     - vssadmin.exe
     - wmic.exe
     - bcdedit.exe
-    process.command_line|contains|any:
+    process.command_line|contains:
     - delete shadows
     - shadowcopy delete
     - recoveryenabled no
