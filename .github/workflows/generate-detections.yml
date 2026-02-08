@@ -29,22 +29,12 @@ jobs:
         run: |
           echo "Cleaning stale artifacts from previous runs..."
 
-          #remove backup folder (rejected rules accumulate here)
-          rm -rf generated/all_rules_backup
-          echo "✓ Removed all_rules_backup/"
-
-          #remove old session files from generated/
-          rm -f generated/iterative_session_*.json
-          echo "✓ Removed old session files from generated/"
+          #run cleanup script
+          bash scripts/cleanup_staging.sh
 
           #clean local session_results folder (not committed but may exist from manual runs)
           rm -rf session_results/*
           echo "✓ Cleaned session_results/"
-
-          #remove stale quality reports
-          rm -f generated/STATIC_QUALITY_REPORT.json
-          rm -f generated/PASSING_RULE_IDS.json
-          echo "✓ Removed old quality reports"
 
           echo "Ready for fresh generation run"
 
