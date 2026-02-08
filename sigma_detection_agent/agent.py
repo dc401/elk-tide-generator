@@ -230,17 +230,82 @@ payload_generator_agent = Agent(
     model='gemini-2.5-pro',
     name='payload_generator',
     instruction="""
-    You are a security testing expert.
+    You are a security testing expert. Generate comprehensive test payloads for Sigma detection rules.
 
-    Generate test payloads for each Sigma rule matching the target platform from CTI:
-    - True Positives (TP): malicious activity that should alert
-    - False Negatives (FN): evasion techniques that bypass detection
-    - False Positives (FP): benign activity that might false alarm
-    - True Negatives (TN): normal activity that shouldn't alert
+    ## Requirements
 
-    Use log format appropriate for the target environment (Windows Event Logs, CloudTrail, audit.log, etc).
+    For EACH Sigma rule, generate AT LEAST 2 payloads per category:
+    - **True Positives (TP)**: 2-3 malicious activities that SHOULD trigger the alert
+    - **False Negatives (FN)**: 1-2 evasion techniques that SHOULD trigger but might bypass detection
+    - **False Positives (FP)**: 1-2 benign activities that MIGHT false alarm
+    - **True Negatives (TN)**: 2-3 normal activities that should NOT trigger
 
-    Output as TestPayloadSet schema.
+    ## Critical: Use Correct Log Format
+
+    Research and use the EXACT log format for the target platform:
+
+    **Windows (Sysmon Event ID 1 - Process Creation):**
+    ```json
+    {
+        "EventID": 1,
+        "UtcTime": "2024-01-15 14:23:45.123",
+        "ProcessGuid": "{00000000-0000-0000-0000-000000000000}",
+        "ProcessId": 1234,
+        "Image": "C:\\\\Windows\\\\System32\\\\cmd.exe",
+        "FileVersion": "10.0.19041.1",
+        "CommandLine": "cmd.exe /c whoami",
+        "User": "DOMAIN\\\\username",
+        "ParentProcessGuid": "{00000000-0000-0000-0000-000000000000}",
+        "ParentImage": "C:\\\\Windows\\\\explorer.exe",
+        "ParentCommandLine": "C:\\\\Windows\\\\Explorer.EXE"
+    }
+    ```
+
+    **AWS CloudTrail:**
+    ```json
+    {
+        "eventVersion": "1.08",
+        "eventTime": "2024-01-15T14:23:45Z",
+        "eventName": "AssumeRole",
+        "eventSource": "sts.amazonaws.com",
+        "userIdentity": {
+            "type": "IAMUser",
+            "principalId": "AIDAI...",
+            "arn": "arn:aws:iam::123456789012:user/username",
+            "accountId": "123456789012",
+            "userName": "username"
+        },
+        "requestParameters": {
+            "roleArn": "arn:aws:iam::123456789012:role/target-role",
+            "roleSessionName": "session-name"
+        },
+        "responseElements": {
+            "credentials": {
+                "accessKeyId": "ASIAI..."
+            }
+        },
+        "sourceIPAddress": "203.0.113.42"
+    }
+    ```
+
+    ## Payload Naming Convention
+
+    Name each payload file: `{category}_{number}.json`
+    - `tp_01.json`, `tp_02.json` - True Positives
+    - `fn_01.json` - False Negative
+    - `fp_01.json`, `fp_02.json` - False Positives
+    - `tn_01.json`, `tn_02.json`, `tn_03.json` - True Negatives
+
+    ## Important Notes
+
+    - Include ALL fields required by the Sigma rule
+    - Use realistic values (real process paths, valid timestamps, etc.)
+    - For TP: Make it clearly malicious
+    - For FN: Show evasion that SHOULD still trigger but might not
+    - For FP: Show legitimate use that looks suspicious
+    - For TN: Show normal business operations
+
+    Output as TestPayloadSet schema with separate payload for each test case.
     """,
     output_schema=TestPayloadSet,
     generate_content_config=GenerateContentConfig(

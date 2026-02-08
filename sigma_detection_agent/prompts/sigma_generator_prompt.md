@@ -81,33 +81,67 @@ fields:
 
 ## Detection Logic Guidelines
 
-### Field Names
+### Field Names - ECS Compliance (Critical)
 
-**Research correct field names for target environment:**
-- AWS CloudTrail: eventName, userIdentity, requestParameters, etc.
-- Azure Activity Logs: OperationName, Caller, Properties, etc.
-- Windows Event Logs: EventID, SubjectUserName, TargetUserName, etc.
-- Kubernetes: verb, objectRef, user, sourceIPs, etc.
-- GCP Audit Logs: protoPayload.methodName, principalEmail, etc.
+**ALWAYS prefer Elastic Common Schema (ECS) field names when possible for maximum portability.**
 
-**DO NOT guess field names. Research them.**
+**ECS Standard Fields (use these instead of product-specific names):**
+- Process: `process.name`, `process.executable`, `process.command_line`, `process.parent.name`
+- File: `file.path`, `file.name`, `file.extension`, `file.hash.md5`
+- Network: `source.ip`, `destination.ip`, `destination.port`, `network.protocol`
+- User: `user.name`, `user.domain`, `user.id`
+- Event: `event.action`, `event.category`, `event.type`, `event.outcome`
 
-### Sigma Field Modifiers
+**Product-Specific Fallbacks (only if ECS not available):**
+- AWS CloudTrail: eventName, userIdentity, requestParameters
+- Azure Activity Logs: OperationName, Caller, Properties
+- Windows Event Logs (Sysmon): EventID, Image, TargetFilename, CommandLine
+- Kubernetes: verb, objectRef, user, sourceIPs
+- GCP Audit Logs: protoPayload.methodName, principalEmail
 
-Use Sigma modifiers for flexible matching:
-- `|contains` - substring match
-- `|endswith` - suffix match
-- `|startswith` - prefix match
-- `|re` - regex match
-- `|all` - all list items must match
-- `|base64` - base64 decode before matching
+**Rule: If the target SIEM supports ECS, use ECS fields. Otherwise use product-specific fields.**
 
-Example:
+**DO NOT guess field names. Research them using Google Search tool.**
+
+### Sigma Field Modifiers - Performance Critical
+
+Use Sigma modifiers for flexible matching, but **AVOID patterns that cause performance issues:**
+
+**✅ GOOD (Fast):**
+- `|startswith` - prefix match (e.g., `'Assume'` → fast index scan)
+- `|contains` - substring match (use sparingly, can be slow)
+- Exact match - fastest option when possible
+
+**❌ BAD (Extremely Slow - DO NOT USE):**
+- `|endswith` - **CONVERTS TO LEADING WILDCARD `*pattern` - CAUSES FULL TABLE SCANS**
+- `|re` with `^.*pattern` - same problem as endswith
+- Multiple wildcards in single field
+
+**CRITICAL PERFORMANCE RULE:**
+**NEVER use `|endswith` modifier. It converts to `*pattern` leading wildcard which requires scanning EVERY log entry. This can crash production SIEMs.**
+
+**Instead of endswith, use:**
+1. Exact filename match if possible
+2. `|contains` with unique substring
+3. Multiple `|startswith` options for known prefixes
+4. Regex without leading wildcard
+
+**Good Example:**
 ```yaml
 detection:
     selection:
-        eventName|startswith: 'Assume'  # matches AssumeRole, AssumeRoleWithSAML, etc.
-        userAgent|contains: 'boto3'
+        eventName|startswith: 'Assume'  # ✅ Fast - index scan
+        eventName:  # ✅ Fast - exact match
+            - 'AssumeRole'
+            - 'AssumeRoleWithSAML'
+```
+
+**Bad Example (DO NOT USE):**
+```yaml
+detection:
+    selection:
+        filename|endswith: '.txt'  # ❌ SLOW - full scan, avoid
+        filename|contains: 'readme'  # ⚠️ Slower but acceptable if specific enough
 ```
 
 ### False Positive Filtering
@@ -192,18 +226,22 @@ For each rule, provide test scenarios:
 ## Best Practices
 
 ✅ **DO:**
-- Use target environment from TTP mapping
-- Research correct field names
+- Use Elastic Common Schema (ECS) fields when possible
+- Use `|startswith` or exact match for performance
+- Research correct field names with Google Search
 - Include false positive filters
 - Add comprehensive test scenarios
 - Follow Sigma spec exactly
+- Prefer specific, targeted detection logic
 
 ❌ **DON'T:**
-- Hardcode platform assumptions
-- Guess field names
+- **NEVER use `|endswith` modifier (causes leading wildcards - extremely slow)**
+- Use non-ECS fields when ECS equivalent exists
+- Guess field names without research
 - Create overly broad rules (condition: true)
-- Use wildcards without filters
+- Use multiple wildcards in detection logic
 - Forget test scenarios
+- Create rules that require full log scans
 
 ## Your Task
 
