@@ -381,13 +381,16 @@ python scripts/run_llm_judge.py --rules-dir generated/detection_rules --test-res
 
 ## Snapshot Info
 
-**Snapshot Location:** `snapshots/snapshot_2026-02-08_16-57-08_clean_es_native/`
+**Snapshot Location:** `snapshots/snapshot_2026-02-08_16-57-08_clean_es_native.tar.gz`
 **Files Archived:** 63
+**Archive Size:** 86K (compressed)
 **Archive Method:** `git archive` (clean snapshot of committed code)
 
 **To Restore Snapshot:**
 ```bash
-cd snapshots/snapshot_2026-02-08_16-57-08_clean_es_native/
+cd snapshots/
+tar -xzf snapshot_2026-02-08_16-57-08_clean_es_native.tar.gz
+cd snapshot_2026-02-08_16-57-08_clean_es_native/
 # All files are there as they were at commit 747b89c
 ```
 
@@ -397,6 +400,7 @@ cd snapshots/snapshot_2026-02-08_16-57-08_clean_es_native/
 
 ✅ Snapshot created in `snapshots/`
 ✅ Old snapshots deleted (none existed)
+✅ Snapshot compressed to .tar.gz (reduces context window pollution)
 ✅ SESSION_STATE.md created (this file)
 ✅ PROGRESS.md updated with current status
 ✅ Git committed (clean working tree)
