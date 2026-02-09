@@ -55,6 +55,11 @@ on:
         type: boolean
         default: true
 
+#prevent concurrent runs of this workflow
+concurrency:
+  group: end-to-end-pipeline
+  cancel-in-progress: true
+
 permissions:
   contents: write
   actions: read
