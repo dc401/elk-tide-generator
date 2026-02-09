@@ -87,20 +87,23 @@ test_cases:
   evasion_technique: Ransomware uses a different naming convention for its ransom
     note, bypassing detection based on specific filenames.
 - type: FP
-  description: Legitimate file creation with 'akira' in name (unlikely)
+  description: Legitimate file with similar naming pattern (backup/archive)
   log_entry:
     event:
       category: file
       type: creation
       code: 11
     file:
-      name: akira_project_notes.txt
-      path: D:\Projects\akira_project_notes.txt
+      name: backup_akira_readme.txt
+      path: D:\Backups\2024\backup_akira_readme.txt
       extension: txt
     process:
-      name: notepad.exe
-    '@timestamp': '2024-03-14T12:00:00Z'
-  expected_match: false
+      name: robocopy.exe
+      command_line: robocopy D:\Projects D:\Backups\2024 /E
+    user:
+      name: SYSTEM
+    '@timestamp': '2024-03-14T02:00:00Z'
+  expected_match: true
   evasion_technique: null
 - type: TN
   description: Normal document creation

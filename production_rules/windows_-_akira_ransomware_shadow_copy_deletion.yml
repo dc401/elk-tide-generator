@@ -57,7 +57,7 @@ test_cases:
   expected_match: true
   evasion_technique: null
 - type: TP
-  description: Malicious wmic shadow copy deletion
+  description: Malicious wmic shadow copy deletion (non-interactive)
   log_entry:
     event:
       category: process
@@ -65,7 +65,7 @@ test_cases:
       code: 1
     process:
       name: wmic.exe
-      command_line: wmic shadowcopy delete
+      command_line: wmic shadowcopy delete /nointeractive
       executable: C:\Windows\System32\wbem\wmic.exe
     user:
       name: SYSTEM
