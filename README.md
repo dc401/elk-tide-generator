@@ -139,6 +139,43 @@ python run_agent.py --cti-folder cti_src --output generated
 python run_agent.py --cti-folder cti_src --output generated --no-refinement
 ```
 
+### Quality-Driven Retry (Local Development with Elasticsearch)
+
+Test-based refinement that automatically improves rules based on integration test results:
+
+```bash
+#start elasticsearch first (Docker)
+docker run -d --name elasticsearch \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  -p 9200:9200 \
+  docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+
+#run with quality retry (requires ES running)
+python run_agent.py \
+  --cti-folder cti_src \
+  --output generated \
+  --quality-retry \
+  --max-iterations 3 \
+  --precision-threshold 0.60 \
+  --recall-threshold 0.70
+
+#cleanup
+docker stop elasticsearch && docker rm elasticsearch
+```
+
+**How it works:**
+1. Generate rules from CTI
+2. Run integration tests (TP/FN/FP/TN evaluation)
+3. Check quality metrics (precision ≥60%, recall ≥70%)
+4. If fail: Analyze failures and regenerate with feedback
+5. Repeat up to max iterations (default: 3)
+
+**Requirements:**
+- Elasticsearch running locally on port 9200
+- Docker (for ephemeral ES container)
+- Designed for local development, not CI/CD
+
 ## End-to-End Testing
 
 ### Run Complete Pipeline (Recommended)

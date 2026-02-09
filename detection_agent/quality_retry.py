@@ -38,20 +38,28 @@ async def run_with_quality_retry(
     feedback_content = None
 
     for iteration in range(1, max_iterations + 1):
+        import time
+        iteration_start = time.time()
+
         print(f"\n{'='*80}")
         print(f"ITERATION {iteration}/{max_iterations}")
         print(f"{'='*80}\n")
 
         if iteration_history:
-            print("Previous iterations:")
+            print("Previous iteration results:")
             for prev in iteration_history:
                 print(f"  Iteration {prev['iteration']}:")
+                print(f"    Rules: {prev.get('rules_generated', 0)}")
                 print(f"    Precision: {prev['precision']*100:.1f}% | Recall: {prev['recall']*100:.1f}%")
                 print(f"    Status: {prev['status']}")
             print()
 
         #run detection agent (with feedback if not first iteration)
         try:
+            print(f"[Phase 1/3] Rule Generation")
+            print(f"  CTI sources: {cti_dir}")
+            print(f"  Feedback mode: {'WITH previous failure analysis' if feedback_content else 'FROM CTI (first attempt)'}")
+            print()
             if feedback_content:
                 print(f"Generating rules WITH feedback from iteration {iteration - 1}...\n")
                 #save feedback for agent to use
@@ -84,7 +92,8 @@ async def run_with_quality_retry(
             print(f"\n✓ Generated {rules_generated} rules")
 
             #run integration tests
-            print(f"\nRunning integration tests...")
+            print(f"\n[Phase 2/3] Integration Testing")
+            print(f"  Testing TP/FN/FP/TN scenarios...")
             test_result = run_integration_tests(output_dir)
 
             if not test_result:
@@ -101,9 +110,13 @@ async def run_with_quality_retry(
             precision = test_result['precision']
             recall = test_result['recall']
 
+            print(f"\n[Phase 3/3] Quality Evaluation")
+            iteration_elapsed = time.time() - iteration_start
+
             print(f"\n{'='*80}")
             print(f"ITERATION {iteration} RESULTS")
             print(f"{'='*80}")
+            print(f"Time: {iteration_elapsed:.1f}s")
             print(f"Precision: {precision*100:.1f}% (threshold: {precision_threshold*100:.0f}%)")
             print(f"Recall: {recall*100:.1f}% (threshold: {recall_threshold*100:.0f}%)")
             print(f"F1 Score: {test_result['f1_score']:.3f}")

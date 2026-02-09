@@ -35,28 +35,39 @@ async def run_with_refinement(
         print(f"\n{'#'*80}")
         print(f"# ITERATION {iteration}/{max_iterations}")
         print(f"{'#'*80}\n")
-        
+
         #show previous failures if this is a retry
         if failure_history:
-            print("Previous failures:")
+            print("Previous iteration results:")
             for prev in failure_history:
                 print(f"  Iteration {prev['iteration']}:")
                 print(f"    Rules generated: {prev['rules_generated']}")
                 print(f"    Rules validated: {prev['rules_validated']}")
                 print(f"    Issues: {prev['summary']}")
             print()
-        
+
         #run detection agent
+        import time
+        start_time = time.time()
+
         try:
+            print(f"Starting agent run for iteration {iteration}...")
+            print(f"  CTI directory: {cti_dir}")
+            print(f"  Output directory: {output_dir}")
+            print()
             result = await run_detection_agent(
                 cti_dir,
                 output_dir,
                 project_id,
                 location
             )
-            
+
+            elapsed_time = time.time() - start_time
             rules_generated = result.get('rules_generated', 0)
-            
+
+            print(f"\nIteration {iteration} completed in {elapsed_time:.1f}s")
+            print(f"  Rules generated: {rules_generated}")
+
             #success - at least some rules passed
             if rules_generated > 0:
                 print(f"\n{'='*80}")
@@ -64,6 +75,7 @@ async def run_with_refinement(
                 print(f"{'='*80}")
                 print(f"Rules generated: {rules_generated}")
                 print(f"Iterations used: {iteration}/{max_iterations}")
+                print(f"Total time: {elapsed_time:.1f}s")
                 return result
             
             #no rules passed - prepare for retry
