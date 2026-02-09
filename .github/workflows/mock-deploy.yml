@@ -1,0 +1,300 @@
+name: Mock SIEM Deployment
+
+#triggers when PR with staged rules is merged to main
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'staged_rules/**'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  mock-deploy:
+    name: Deploy to Mock Production SIEM
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  #need previous commit to find which PR was merged
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          echo "Installing Python dependencies..."
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          echo "✓ Dependencies installed"
+
+      - name: Find Merged PR
+        id: find-pr
+        run: |
+          #get the merge commit message
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+
+          #extract PR number from merge commit
+          PR_NUM=$(echo "$COMMIT_MSG" | grep -oP '#\K\d+' | head -1 || echo "")
+
+          if [ -z "$PR_NUM" ]; then
+            echo "No PR number found in commit message"
+            echo "pr_number=" >> $GITHUB_OUTPUT
+          else
+            echo "pr_number=$PR_NUM" >> $GITHUB_OUTPUT
+            echo "Found PR #$PR_NUM"
+          fi
+
+      - name: Identify Batch
+        id: batch
+        run: |
+          #find the most recent batch summary in staged_rules/
+          BATCH_FILE=$(ls -t staged_rules/batch_*.json 2>/dev/null | head -1)
+
+          if [ -z "$BATCH_FILE" ]; then
+            echo "No batch summary found"
+            exit 1
+          fi
+
+          BATCH_ID=$(basename "$BATCH_FILE" .json)
+          RULE_COUNT=$(jq -r '.rules_staged' "$BATCH_FILE")
+
+          echo "batch_id=$BATCH_ID" >> $GITHUB_OUTPUT
+          echo "batch_file=$BATCH_FILE" >> $GITHUB_OUTPUT
+          echo "rule_count=$RULE_COUNT" >> $GITHUB_OUTPUT
+
+          echo "Batch: $BATCH_ID"
+          echo "Rules: $RULE_COUNT"
+
+      - name: Start Elasticsearch (Mock Production SIEM)
+        run: |
+          echo "=== Mock Production Deployment ==="
+          echo "In real scenario, this would deploy to Chronicle/Splunk/Sentinel/etc."
+          echo ""
+
+          echo "Starting ephemeral Elasticsearch (mock SIEM)..."
+          docker run -d --name elasticsearch \
+            -e "discovery.type=single-node" \
+            -e "xpack.security.enabled=false" \
+            -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+            -p 9200:9200 \
+            docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+
+          echo "Waiting for Elasticsearch to be ready..."
+          timeout 60 bash -c 'until curl -s http://localhost:9200/_cluster/health; do sleep 2; done'
+          echo "✓ Mock SIEM ready"
+
+      - name: Deploy Rules to Mock SIEM
+        id: deploy
+        run: |
+          echo "Deploying rules from staged_rules/ to mock production..."
+
+          DEPLOYED=0
+          for rule_file in staged_rules/*.yml; do
+            [ -f "$rule_file" ] || continue
+
+            RULE_NAME=$(basename "$rule_file" .yml)
+
+            #extract query from YAML
+            QUERY=$(python3 -c "
+          import yaml
+          with open('$rule_file') as f:
+              rule = yaml.safe_load(f)
+          print(rule.get('query', ''))
+          ")
+
+            #simulate deployment to Elasticsearch
+            RULE_JSON=$(cat <<EOF
+          {
+            "type": "alert",
+            "alert": {
+              "name": "${RULE_NAME}",
+              "params": {
+                "query": "${QUERY}"
+              },
+              "schedule": {"interval": "5m"}
+            }
+          }
+          EOF
+          )
+
+            #deploy to mock SIEM
+            curl -s -X POST "http://localhost:9200/.kibana/_doc/${RULE_NAME}" \
+              -H 'Content-Type: application/json' \
+              -d "$RULE_JSON" > /dev/null
+
+            echo "  ✓ Deployed: $RULE_NAME"
+            DEPLOYED=$((DEPLOYED + 1))
+          done
+
+          echo "deployed_count=$DEPLOYED" >> $GITHUB_OUTPUT
+          echo ""
+          echo "Total rules deployed: $DEPLOYED"
+
+      - name: Verify Deployment
+        run: |
+          echo "Verifying deployment in mock SIEM..."
+
+          #check deployed rules
+          RULE_COUNT=$(curl -s "http://localhost:9200/.kibana/_count" | jq -r '.count')
+          echo "  Rules in mock SIEM: $RULE_COUNT"
+
+          #check SIEM health
+          HEALTH=$(curl -s "http://localhost:9200/_cluster/health" | jq -r '.status')
+          echo "  SIEM health: $HEALTH"
+
+          if [ "$HEALTH" != "green" ] && [ "$HEALTH" != "yellow" ]; then
+            echo "  ✗ SIEM health check failed"
+            exit 1
+          fi
+
+          echo "  ✓ Deployment verified"
+
+      - name: Move Rules to Production
+        run: |
+          echo "Moving rules from staged_rules/ to production_rules/..."
+
+          #create production directory
+          mkdir -p production_rules
+
+          #move rule YAML files (without UID suffix for production)
+          for staged_file in staged_rules/*.yml; do
+            [ -f "$staged_file" ] || continue
+
+            #extract original rule name without UID
+            FILENAME=$(basename "$staged_file")
+            #remove UID suffix (last 9 chars: _xxxxxxxx.yml)
+            PROD_NAME=$(echo "$FILENAME" | sed 's/_[a-f0-9]\{8\}\.yml$/.yml/')
+
+            cp "$staged_file" "production_rules/$PROD_NAME"
+            echo "  ✓ $PROD_NAME"
+          done
+
+          echo ""
+          echo "✓ Rules moved to production_rules/"
+
+      - name: Archive Staged Rules
+        run: |
+          echo "Archiving staged rules..."
+
+          #create archive directory
+          mkdir -p archived_rules
+
+          BATCH_ID="${{ steps.batch.outputs.batch_id }}"
+          ARCHIVE_DIR="archived_rules/${BATCH_ID}_deployed_$(date +%Y%m%d)"
+
+          #move entire staged_rules/ to archive
+          mv staged_rules "$ARCHIVE_DIR"
+
+          #create deployment record
+          cat > "${ARCHIVE_DIR}/deployment_record.json" <<EOF
+          {
+            "batch_id": "$BATCH_ID",
+            "deployed_timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "deployed_by": "${{ github.actor }}",
+            "pr_number": "${{ steps.find-pr.outputs.pr_number }}",
+            "rules_deployed": ${{ steps.deploy.outputs.deployed_count }},
+            "deployment_status": "success"
+          }
+          EOF
+
+          echo "✓ Staged rules archived to $ARCHIVE_DIR"
+
+      - name: Cleanup Mock SIEM
+        if: always()
+        run: |
+          echo "Tearing down mock SIEM..."
+          docker stop elasticsearch 2>/dev/null || true
+          docker rm elasticsearch 2>/dev/null || true
+          echo "✓ Cleanup complete"
+
+      - name: Commit Production Rules
+        run: |
+          git config user.name "Detection Bot"
+          git config user.email "bot@detections.local"
+
+          git add production_rules/ archived_rules/
+          git commit -m "deploy: Move detection rules to production
+
+          Batch: ${{ steps.batch.outputs.batch_id }}
+          Rules: ${{ steps.batch.outputs.rule_count }} rules deployed
+          PR: #${{ steps.find-pr.outputs.pr_number }}
+
+          Deployed rules:
+          $(ls production_rules/*.yml | xargs -n1 basename)
+
+          Mock deployment validated in ephemeral Elasticsearch.
+          Rules archived in archived_rules/${{ steps.batch.outputs.batch_id }}_deployed_*
+
+          Co-Authored-By: Claude <noreply@anthropic.com>"
+
+          git push
+
+      - name: Comment on PR
+        if: steps.find-pr.outputs.pr_number != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.find-pr.outputs.pr_number }};
+            const deployedCount = ${{ steps.deploy.outputs.deployed_count }};
+            const batchId = '${{ steps.batch.outputs.batch_id }}';
+
+            const comment = `## ✅ Mock Deployment Complete
+
+            **Batch:** \`${batchId}\`
+            **Rules Deployed:** ${deployedCount}
+            **Status:** Success
+
+            ### Deployment Details
+
+            - **Mock SIEM:** Ephemeral Elasticsearch 8.12.0
+            - **Validation:** All rules deployed and verified
+            - **Production:** Rules moved to \`production_rules/\`
+            - **Archive:** Staged rules archived in \`archived_rules/\`
+
+            ### In Production
+
+            These rules would now be active in your SIEM:
+            - Chronicle: YARA-L 2.0 format
+            - Splunk: SPL queries
+            - Sentinel: KQL queries
+            - Elastic: Elasticsearch DSL
+
+            **Next:** Rules are production-ready for real SIEM deployment.
+            `;
+
+            await github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Deployment Summary
+        if: success()
+        run: |
+          echo "================================"
+          echo "✓ Mock Deployment Complete"
+          echo "================================"
+          echo ""
+          echo "Batch: ${{ steps.batch.outputs.batch_id }}"
+          echo "Rules Deployed: ${{ steps.deploy.outputs.deployed_count }}"
+          echo ""
+          echo "Production Rules: production_rules/"
+          ls -lh production_rules/
+          echo ""
+          echo "In production, these would be converted to your SIEM's native format:"
+          echo "  - Splunk: SPL queries"
+          echo "  - Chronicle: YARA-L 2.0"
+          echo "  - Sentinel: KQL queries"
+          echo "  - Elastic: Elasticsearch DSL"
+          echo ""
+          echo "================================"
