@@ -198,6 +198,16 @@ async def run_with_quality_retry(
         'iteration_history': iteration_history
     }
 
+def check_elasticsearch_available() -> bool:
+    """check if elasticsearch is running and accessible"""
+    try:
+        import urllib.request
+        req = urllib.request.Request('http://localhost:9200/_cluster/health')
+        with urllib.request.urlopen(req, timeout=2) as response:
+            return response.status == 200
+    except:
+        return False
+
 def run_integration_tests(output_dir: Path) -> Optional[Dict]:
     """run integration tests and return quality metrics"""
 
@@ -206,8 +216,11 @@ def run_integration_tests(output_dir: Path) -> Optional[Dict]:
         print(f"  ✗ No detection_rules directory found")
         return None
 
-    #note: this assumes elasticsearch is already running (GitHub Actions setup)
-    #for local testing, would need to start docker container first
+    #check if elasticsearch is available
+    if not check_elasticsearch_available():
+        print(f"  ⚠️  Elasticsearch not available - skipping integration tests")
+        print(f"  Run tests manually with: python scripts/execute_detection_tests.py")
+        return None
 
     try:
         cmd = [
