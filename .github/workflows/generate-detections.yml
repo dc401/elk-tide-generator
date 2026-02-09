@@ -11,8 +11,6 @@ on:
         required: true
       GCP_PROJECT_ID:
         required: true
-      GOOGLE_CLOUD_LOCATION:
-        required: true
     outputs:
       selected_region:
         description: 'Dynamically selected GCP region for this run'
