@@ -33,9 +33,9 @@ If you cannot find definitive information, set confidence to "low" and valid to 
 """
     
     try:
-        #use Gemini 2.5 Flash with reflection
+        #use Gemini 2.5 Flash with thinking
         response = await client.aio.models.generate_content(
-            model='gemini-2.0-flash-exp',  #will update to 2.5 when available
+            model='gemini-2.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.0,  #deterministic for schema research
