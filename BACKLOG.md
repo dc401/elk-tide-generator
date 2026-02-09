@@ -1,0 +1,276 @@
+# Detection Agent Backlog
+
+**Last Updated:** 2026-02-08
+
+---
+
+## Current Priority: Fix Core ECS Field Issue
+- **Status:** ✅ Prompt fixes committed (6e0ea64)
+- **Next:** Test with new rule generation
+- **Then:** PR creation and mock deploy
+
+---
+
+## Backlog (Post-Current Fix)
+
+### 1. Workflow Timing Optimization
+**Priority:** Medium
+**Status:** Pending
+
+**Tasks:**
+- Clean up workflow sleep timings
+- Set to 1 second sleeps to prevent failed messages
+- Review all `INTER_AGENT_DELAY` and `asyncio.sleep()` calls
+- Balance between rate limiting and performance
+
+**Files to update:**
+- `detection_agent/agent.py` - INTER_AGENT_DELAY
+- `detection_agent/tools/iterative_validator.py` - inter_agent_delay
+- `.github/workflows/*.yml` - any hardcoded delays
+
+---
+
+### 2. Support for Detection Engineer Uploads (SPL/YML)
+**Priority:** High
+**Status:** Pending
+
+**Goal:** Allow detection engineers to upload existing correlation searches in SPL or YML format and treat them the same as threat intelligence.
+
+**Tasks:**
+1. **File Format Support:**
+   - Extend `load_cti_files.py` to handle `.spl` (Splunk) and `.yml` (YAML) detection rules
+   - Parse existing detection logic and extract:
+     - Detection patterns (what to look for)
+     - Field mappings (source → ECS translation)
+     - Known false positives
+     - Test cases (if embedded)
+
+2. **Translation Logic:**
+   - SPL → Lucene query translation
+   - YAML (Sigma/custom) → Lucene query translation
+   - Map Splunk field names to ECS equivalents (e.g., `sourcetype` → `event.dataset`)
+
+3. **Intelligence Extraction:**
+   - Treat detection rules as "threat intelligence"
+   - Extract TTPs from rule descriptions/tags
+   - Use existing detection logic as hints for query construction
+   - Preserve test cases from uploaded rules
+
+4. **Example Workflow:**
+   ```
+   User uploads: my_detection.spl
+   Content: "index=windows sourcetype=WinEventLog:Security EventCode=4688 CommandLine=*vssadmin*delete*"
+
+   Agent:
+   1. Parses SPL → extracts search terms (EventCode=4688, CommandLine pattern)
+   2. Maps to ECS → event.code:4688, process.command_line:*vssadmin*delete*
+   3. Generates Lucene query with core ECS fields
+   4. Creates test cases based on SPL logic
+   ```
+
+**Files to create/modify:**
+- `detection_agent/tools/load_cti_files.py` - add SPL/YML parsing
+- `detection_agent/tools/parse_spl.py` - SPL parser (new)
+- `detection_agent/tools/parse_detection_yaml.py` - YAML detection parser (new)
+- `detection_agent/tools/field_mapper.py` - Splunk→ECS, other→ECS mapping (new)
+- `detection_agent/prompts/detection_generator.md` - update to handle uploaded detections
+- `cti_src/README.md` - document supported formats
+
+**Dependencies:**
+- Consider using `splunk-sdk` or `pyparsing` for SPL parsing
+- YAML parsing already supported (PyYAML)
+
+**Testing:**
+- Upload sample SPL detection → verify Lucene translation
+- Upload Sigma rule → verify no duplicate effort
+- Upload custom YAML → verify field mapping
+
+---
+
+### 3. Setup & Bootstrap Script
+**Priority:** Medium
+**Status:** Pending
+
+**Tasks:**
+1. Create `scripts/setup.sh` (or `setup.py` for cross-platform)
+   - Check Python version (3.10+)
+   - Install dependencies from requirements.txt
+   - Verify GCP authentication
+   - Verify GitHub CLI installed
+   - Download ECS schema cache
+   - Create necessary directories (cti_src, generated, session_results)
+   - Set executable permissions on scripts
+   - Validate environment variables
+
+2. Create bootstrap checklist script
+   - Pre-flight checks before running agent
+   - Verify all tools available (yq, jq, docker, gh)
+   - Test GCP/GitHub connectivity
+
+3. Error messages and remediation
+   - If GCP auth fails → "Run: gcloud auth login"
+   - If gh not found → "Install GitHub CLI: brew install gh"
+   - If Docker not running → "Start Docker Desktop"
+
+**Files to create:**
+- `scripts/setup.sh` or `scripts/setup.py`
+- `scripts/preflight_check.sh`
+- `SETUP.md` - setup instructions
+
+---
+
+### 4. Documentation Updates
+**Priority:** Medium
+**Status:** Pending
+
+**Tasks:**
+1. **README.md:**
+   - Add setup instructions (link to SETUP.md)
+   - Document supported file formats (PDF, DOCX, TXT, MD, SPL, YML)
+   - Add architecture diagram (mermaid or ASCII)
+   - Document workflow triggers (manual, push, schedule)
+   - Add troubleshooting section
+   - Link to ITERATIVE_VALIDATION_SUCCESS.md
+
+2. **cti_src/README.md:**
+   - Explain what CTI files to place here
+   - Document supported formats
+   - Provide examples
+   - Explain how uploaded SPL/YML is processed
+
+3. **CONTRIBUTING.md:**
+   - How to add new validation tools
+   - How to modify generator prompts
+   - How to test locally vs in GitHub Actions
+
+**Files to create/update:**
+- `README.md` - complete overhaul
+- `cti_src/README.md` - new file
+- `CONTRIBUTING.md` - new file
+
+---
+
+### 5. Logging & Exception Handling Improvements
+**Priority:** High
+**Status:** Pending
+
+**Goal:** Ensure robust logging and exception handling throughout the entire agent pipeline, including sub-agents and iterative workflows.
+
+**Tasks:**
+1. **Centralized Logging:**
+   - Create `detection_agent/utils/logger.py`
+   - Use Python `logging` module with structured logs
+   - Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+   - Log to file: `session_results/agent_run_<timestamp>.log`
+   - Log format: `[TIMESTAMP] [LEVEL] [COMPONENT] Message`
+
+2. **Exception Handling:**
+   - Wrap all API calls in try/except with specific exceptions
+   - Distinguish between:
+     - **Retryable errors:** ResourceExhausted, 429, 500, 503 → retry with backoff
+     - **Fatal errors:** Invalid API key, quota exceeded, malformed response → fail fast
+     - **Validation errors:** Invalid Lucene syntax, unknown field → trigger refinement
+   - Log stack traces for debugging
+   - Return user-friendly error messages
+
+3. **Retry Logic Audit:**
+   - Review all `generate_with_retry()` calls
+   - Ensure exponential backoff is consistent
+   - Add jitter to prevent thundering herd
+   - Log retry attempts with delay duration
+
+4. **Sub-Agent Error Handling:**
+   - `research_ecs_field.py` - handle API failures gracefully
+   - `iterative_validator.py` - handle validation failures without crashing
+   - Propagate errors up with context
+
+5. **Workflow-Level Error Handling:**
+   - GitHub Actions workflow failures should output actionable logs
+   - `set -e` for fail-fast, but catch errors and log before exit
+   - Upload logs as artifacts even on failure
+
+**Files to modify:**
+- `detection_agent/utils/logger.py` - new centralized logger
+- `detection_agent/agent.py` - add logging to all steps
+- `detection_agent/tools/*.py` - add exception handling to all tools
+- `detection_agent/tools/research_ecs_field.py` - handle API errors
+- `detection_agent/tools/iterative_validator.py` - handle validation errors
+- `.github/workflows/*.yml` - upload logs on failure
+
+**Example Logging:**
+```python
+import logging
+from detection_agent.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
+
+try:
+    result = await generate_with_retry(...)
+    logger.info(f"Generated {len(result['rules'])} rules")
+except ResourceExhausted as e:
+    logger.warning(f"Rate limited, retrying in {delay}s: {e}")
+    await asyncio.sleep(delay)
+except InvalidResponse as e:
+    logger.error(f"LLM returned invalid response: {e}")
+    raise
+```
+
+---
+
+### 6. Refinement Solution-Wide Retry Logic
+**Priority:** High
+**Status:** Pending
+
+**Goal:** Ensure retry logic is consistent across all agents, sub-agents, and tools.
+
+**Tasks:**
+1. **Retry Configuration Audit:**
+   - Review `AGGRESSIVE_RETRY_CONFIG` and `FLASH_RETRY_CONFIG`
+   - Ensure all API calls use appropriate retry config
+   - Document retry strategies in code comments
+
+2. **Sub-Agent Retry:**
+   - `research_ecs_field.py` - add retry for API calls
+   - `iterative_validator.py` - retry on transient failures
+
+3. **Workflow-Level Retry:**
+   - GitHub Actions: use `continue-on-error` where appropriate
+   - Add `max_retries` parameter to workflow dispatch
+
+4. **Rate Limit Handling:**
+   - Detect ResourceExhausted early
+   - Log quota usage (requests per minute)
+   - Suggest delay duration based on quota limits
+
+**Files to modify:**
+- `detection_agent/agent.py` - audit all retry configs
+- `detection_agent/tools/research_ecs_field.py` - add retry logic
+- `.github/workflows/*.yml` - add workflow retry options
+
+---
+
+## Completed Tasks
+
+### ✅ Iterative Validation System (Stage 3.5)
+- Built ECS schema loader, validator, and research sub-agent
+- Implemented 3-iteration refinement loop
+- Integrated into main agent pipeline
+- **Documented:** ITERATIVE_VALIDATION_SUCCESS.md
+
+### ✅ Integration Testing with Docker Elasticsearch
+- Ephemeral ELK stack in GitHub Actions
+- Test payload execution and metrics calculation
+- Precision/Recall/F1 evaluation
+
+### ✅ Core ECS Field Prompt Fix
+- Updated generator prompt to mandate event.category and event.type
+- Added CRITICAL section emphasizing core ECS categorization
+- Updated all examples to include core fields
+
+---
+
+## Notes
+
+- All backlog items are post-current-fix tasks
+- Current priority: Test prompt fix → ensure recall improves
+- User feedback: "good job" - continue with testing and iteration
