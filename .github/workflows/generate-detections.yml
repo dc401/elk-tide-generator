@@ -125,7 +125,7 @@ jobs:
             --cti-folder cti_src \
             --output generated \
             --project ${{ secrets.GCP_PROJECT_ID }} \
-            --location global
+            --location ${{ secrets.GOOGLE_CLOUD_LOCATION }}
 
       - name: Verify Generated Rules
         run: |

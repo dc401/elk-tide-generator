@@ -154,6 +154,48 @@ def load_config(path: Path) -> Dict:
 
 ---
 
+## 5. Generic Git Commit Authorship (NO CLAUDE BRANDING)
+
+**Constraint:** NEVER use "Co-Authored-By: Claude" or Anthropic references in git commits
+
+**Rationale:**
+- Readers will be using this as a template for their own projects
+- Generic examples are more professional and reusable
+- Avoid vendor-specific branding in educational materials
+
+**What NOT to do:**
+- ❌ DO NOT use: `Co-Authored-By: Claude <noreply@anthropic.com>`
+- ❌ DO NOT use: `Co-Authored-By: AI Assistant <...>`
+- ❌ DO NOT mention "Claude" or "Anthropic" in commit messages
+- ❌ DO NOT add AI tool attribution in git history
+
+**What TO do:**
+- ✅ Use generic examples: `Co-Authored-By: user@example.com`
+- ✅ Keep commit messages focused on technical changes only
+- ✅ Let git config handle authorship automatically
+- ✅ Write commit messages as if a human developer wrote them
+
+**Example commit messages:**
+```
+# Good (generic, professional)
+git commit -m "Add concurrency control to prevent duplicate workflow runs
+
+Prevents multiple instances of end-to-end test from running simultaneously.
+If a new run is triggered while one is in progress, the old one is cancelled."
+
+# Bad (includes AI attribution)
+git commit -m "Add concurrency control...
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+```
+
+**Where this matters:**
+- All git commits
+- PR descriptions (focus on technical content, not tooling)
+- Documentation examples
+
+---
+
 ## Original Design Intent (Reference)
 
 **Core Mission:** Automated CTI → Elasticsearch Detection Rules with quality validation
@@ -187,6 +229,7 @@ def load_config(path: Path) -> Dict:
 2. If adding platform-specific validation → STOP, re-read principle #2
 3. If triggering multiple tests → STOP, re-read principle #3
 4. If adding complexity → STOP, re-read principle #4
+5. If adding "Co-Authored-By: Claude" → STOP, re-read principle #5
 
 **Session handoff:**
 1. Update PROGRESS_SUMMARY.md with what changed
@@ -203,6 +246,7 @@ def load_config(path: Path) -> Dict:
 - Adding GCP-specific validation → VIOLATION of #2
 - Running 3 workflows simultaneously → VIOLATION of #3
 - Creating abstract base classes → VIOLATION of #4
+- Adding "Co-Authored-By: Claude" to commits → VIOLATION of #5
 
 **Recovery:**
 1. Stop immediately
