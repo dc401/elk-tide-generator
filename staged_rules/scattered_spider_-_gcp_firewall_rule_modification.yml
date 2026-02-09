@@ -1,16 +1,16 @@
 name: Scattered Spider - GCP Firewall Rule Modification
-description: Detects attempts by Scattered Spider to create, update, patch, or delete
-  Google Cloud Platform (GCP) firewall rules. Adversaries may modify firewall rules
-  to establish persistence, facilitate C2 communication, or enable lateral movement.
+description: Detects attempts by Scattered Spider or other threat actors to create,
+  modify, or delete Google Cloud Platform (GCP) firewall rules. Adversaries manipulate
+  firewall rules to bypass network restrictions, enable C2, or facilitate data exfiltration.
 type: query
-query: event.category:api AND cloud.provider:gcp AND event.outcome:success AND event.action:(compute.firewalls.create
+query: event.category:api AND cloud.provider:gcp AND event.outcome:success AND event.action:(compute.firewalls.insert
   OR compute.firewalls.update OR compute.firewalls.patch OR compute.firewalls.delete)
 language: lucene
 index:
+- gcp.audit.admin
 - logs-*
-- gcp.auditlog-*
 filters: []
-risk_score: 75
+risk_score: 80
 severity: high
 threat:
 - framework: MITRE ATT&CK
@@ -20,7 +20,7 @@ threat:
     reference: https://attack.mitre.org/tactics/TA0005/
   technique:
   - id: T1562.007
-    name: Disable or Modify Cloud Firewall
+    name: 'Impair Defenses: Disable or Modify Cloud Firewall'
     reference: https://attack.mitre.org/techniques/T1562/007/
 - framework: MITRE ATT&CK
   tactic:
@@ -28,118 +28,107 @@ threat:
     name: Persistence
     reference: https://attack.mitre.org/tactics/TA0003/
   technique:
-  - id: T1098.005
-    name: Cloud Account
-    reference: https://attack.mitre.org/techniques/T1098/005/
+  - id: T1562.007
+    name: 'Impair Defenses: Disable or Modify Cloud Firewall'
+    reference: https://attack.mitre.org/techniques/T1562/007/
 references:
 - https://attack.mitre.org/techniques/T1562/007/
-- https://attack.mitre.org/techniques/T1098/005/
+- https://cloud.google.com/logging/docs/audit/audit-log-fields
 - https://www.elastic.co/guide/en/ecs/current/ecs-cloud.html
-- https://cloud.google.com/compute/docs/reference/rest/v1/firewalls
 author:
 - Detection Agent
 false_positives:
-- Legitimate network administrators creating or modifying firewall rules for application
-  deployment, network segmentation, or security policy updates.
+- Legitimate network configuration changes by cloud administrators or automated infrastructure-as-code
+  deployments.
 note: '## Triage
 
-  Investigate: the user account, the specific firewall rule changes (e.g., opening
-  broad ports, allowing ingress from unknown IPs), and the timing. Correlate with
-  change management records.'
+  Investigate: user identity, source IP, and the specifics of the firewall rule change
+  (e.g., new ports opened, IP ranges allowed). Correlate with change management records.
+
+  Escalate if: changes are unauthorized, open broad access (e.g., 0.0.0.0/0), or are
+  performed by unusual accounts.'
 test_cases:
 - type: TP
   description: Successful creation of a new GCP firewall rule
   log_entry:
     event:
       category: api
-      action: compute.firewalls.create
+      action: compute.firewalls.insert
       outcome: success
     cloud:
       provider: gcp
+      account:
+        id: gcp-project-12345
     user:
-      name: malicious-user@example.com
-    gcp:
-      audit:
-        resource:
-          type: compute.googleapis.com/Firewall
-          name: allow-all-ingress
-    '@timestamp': '2024-03-12T22:50:00Z'
+      name: malicious-admin@example.com
+    '@timestamp': '2024-03-12T22:40:00Z'
   expected_match: true
   evasion_technique: null
 - type: TP
-  description: Successful update of an existing GCP firewall rule
+  description: Successful deletion of a GCP firewall rule
+  log_entry:
+    event:
+      category: api
+      action: compute.firewalls.delete
+      outcome: success
+    cloud:
+      provider: gcp
+      account:
+        id: gcp-project-12345
+    user:
+      name: compromised-user@example.com
+    '@timestamp': '2024-03-12T22:40:15Z'
+  expected_match: true
+  evasion_technique: null
+- type: FN
+  description: Evasion by modifying network routes directly on a VM
+  log_entry:
+    event:
+      category: process
+      type: start
+    cloud:
+      provider: gcp
+      account:
+        id: gcp-project-12345
+    process:
+      name: ip
+      command_line: ip route add default via 10.128.0.1 dev eth0
+    user:
+      name: compromised-vm-user
+    '@timestamp': '2024-03-12T22:41:00Z'
+  expected_match: false
+  evasion_technique: This rule focuses on API calls to modify cloud firewall rules.
+    Modifying network routes directly on a compromised VM instance would bypass this
+    detection.
+- type: FP
+  description: Failed attempt to update a GCP firewall rule
   log_entry:
     event:
       category: api
       action: compute.firewalls.update
-      outcome: success
+      outcome: failure
     cloud:
       provider: gcp
+      account:
+        id: gcp-project-12345
     user:
-      name: compromised-service-account@gcp-project.iam.gserviceaccount.com
-    gcp:
-      audit:
-        resource:
-          type: compute.googleapis.com/Firewall
-          name: default-ssh
-    '@timestamp': '2024-03-12T22:50:15Z'
-  expected_match: true
-  evasion_technique: null
-- type: FN
-  description: Modification of network routes (not firewall rules)
-  log_entry:
-    event:
-      category: api
-      action: compute.routes.update
-      outcome: success
-    cloud:
-      provider: gcp
-    user:
-      name: malicious-user@example.com
-    gcp:
-      audit:
-        resource:
-          type: compute.googleapis.com/Route
-          name: custom-route
-    '@timestamp': '2024-03-12T22:51:00Z'
-  expected_match: false
-  evasion_technique: Modifies network routes directly, which is not covered by the
-    firewall API calls in this rule.
-- type: FP
-  description: Legitimate admin creating a new firewall rule for a new application
-  log_entry:
-    event:
-      category: api
-      action: compute.firewalls.create
-      outcome: success
-    cloud:
-      provider: gcp
-    user:
-      name: network-admin@example.com
-    gcp:
-      audit:
-        resource:
-          type: compute.googleapis.com/Firewall
-          name: allow-app-port-8080
-    '@timestamp': '2024-03-14T10:40:00Z'
+      name: legitimate-admin@example.com
+    '@timestamp': '2024-03-14T13:00:00Z'
   expected_match: false
   evasion_technique: null
 - type: TN
-  description: Normal GCP API call (storage bucket creation)
+  description: Benign GCP API call (listing firewall rules)
   log_entry:
     event:
       category: api
-      action: storage.buckets.create
+      action: compute.firewalls.list
       outcome: success
     cloud:
       provider: gcp
+      account:
+        id: gcp-project-12345
     user:
-      name: dev-user@example.com
-    gcp:
-      audit:
-        resource:
-          type: storage.googleapis.com/Bucket
-          name: new-data-bucket
-    '@timestamp': '2024-03-14T10:45:00Z'
+      name: auditor@example.com
+    '@timestamp': '2024-03-14T13:05:00Z'
   expected_match: false
   evasion_technique: null
