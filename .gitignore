@@ -32,6 +32,12 @@ generated/*.json
 *.log
 .env
 
+#Development artifacts (root-level data files from testing)
+/ttp_validation_results.json
+/test_results.json
+/quality_report.json
+/integration_test_results.yml
+
 #Elasticsearch data (if running locally)
 data/
 logs/
