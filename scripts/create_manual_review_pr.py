@@ -357,9 +357,7 @@ Review: See pr_description.md for detailed analysis"""
         result = subprocess.run(
             ['gh', 'pr', 'create',
              '--title', f'Review Detection Rules - {datetime.now().strftime("%Y-%m-%d")}',
-             '--body-file', 'pr_description.md',
-             '--label', 'detection-review',
-             '--label', 'ready-for-review'],
+             '--body-file', 'pr_description.md'],
             capture_output=True, text=True, check=True
         )
 
