@@ -232,9 +232,7 @@ jobs:
           $(ls production_rules/*.yml | xargs -n1 basename)
 
           Mock deployment validated in ephemeral Elasticsearch.
-          Rules archived in archived_rules/${{ steps.batch.outputs.batch_id }}_deployed_*
-
-          Co-Authored-By: Claude <noreply@anthropic.com>"
+          Rules archived in archived_rules/${{ steps.batch.outputs.batch_id }}_deployed_*"
 
           git push
 

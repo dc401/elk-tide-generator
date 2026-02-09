@@ -119,7 +119,7 @@ def main():
     subprocess.run(['git', 'checkout', '-b', branch_name], check=True)
     subprocess.run(['git', 'add', 'staged_rules/', 'scripts/'], check=True)
     
-    commit_msg = f"Stage detection rules for review\n\nBatch: {batch_id}\nRules: {batch_summary['rules_staged']}\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
+    commit_msg = f"Stage detection rules for review\n\nBatch: {batch_id}\nRules: {batch_summary['rules_staged']}"
     subprocess.run(['git', 'commit', '-m', commit_msg], check=True)
     subprocess.run(['git', 'push', 'origin', branch_name], check=True)
     
