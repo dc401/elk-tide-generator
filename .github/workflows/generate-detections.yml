@@ -5,6 +5,14 @@ name: Generate Detection Rules from CTI
 
 on:
   workflow_dispatch:  #manual trigger
+  workflow_call:  #allow reuse by other workflows (end-to-end test)
+    secrets:
+      GCP_SA_KEY:
+        required: true
+      GCP_PROJECT_ID:
+        required: true
+      GOOGLE_CLOUD_LOCATION:
+        required: true
   push:
     branches: [main]
     paths:

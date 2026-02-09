@@ -1,0 +1,443 @@
+name: End-to-End Detection Pipeline Test
+
+#master orchestration workflow to test complete pipeline
+#triggers all workflows in sequence and aggregates results
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_generation:
+        description: 'Skip rule generation (use existing artifacts)'
+        required: false
+        type: boolean
+        default: false
+      existing_run_id:
+        description: 'Existing run ID (if skip_generation=true)'
+        required: false
+        type: string
+      run_ttp_validator:
+        description: 'Run TTP validator after integration test'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  #step 1: generate detection rules from CTI
+  generate:
+    name: Generate Detection Rules
+    if: ${{ !inputs.skip_generation }}
+    uses: ./.github/workflows/generate-detections.yml
+    secrets: inherit
+    permissions:
+      contents: write
+
+  #step 2: integration test with ephemeral Elasticsearch
+  integration-test:
+    name: Integration Test with Elasticsearch
+    needs: [generate]
+    if: always() && (needs.generate.result == 'success' || inputs.skip_generation)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      test_passed: ${{ steps.test_check.outputs.passed }}
+      precision: ${{ steps.test_check.outputs.precision }}
+      recall: ${{ steps.test_check.outputs.recall }}
+      f1_score: ${{ steps.test_check.outputs.f1_score }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Determine Artifact Run ID
+        id: artifact_id
+        run: |
+          if [ "${{ inputs.skip_generation }}" == "true" ]; then
+            #use provided run ID
+            echo "run_id=${{ inputs.existing_run_id }}" >> $GITHUB_OUTPUT
+            echo "Using existing run ID: ${{ inputs.existing_run_id }}"
+          else
+            #use the generate job's run ID
+            echo "run_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
+            echo "Using current run ID: ${{ github.run_id }}"
+          fi
+
+      - name: Download Rules Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: detection-rules
+          path: generated/
+          run-id: ${{ steps.artifact_id.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Downloaded Rules
+        run: |
+          if [ ! -d "generated/detection_rules" ]; then
+            echo "ERROR: No detection_rules directory found"
+            exit 1
+          fi
+
+          RULE_COUNT=$(find generated/detection_rules -name "*.yml" | wc -l)
+          echo "Found $RULE_COUNT detection rules to test"
+
+          if [ "$RULE_COUNT" -eq 0 ]; then
+            echo "ERROR: No rules to test"
+            exit 1
+          fi
+
+          echo "Detection rules:"
+          ls -lh generated/detection_rules/
+
+      - name: Start Elasticsearch Docker Container
+        run: |
+          echo "Starting ephemeral Elasticsearch for testing..."
+
+          docker run -d \
+            --name elasticsearch \
+            -p 9200:9200 \
+            -e "discovery.type=single-node" \
+            -e "xpack.security.enabled=false" \
+            -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+            docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+
+          echo "✓ Elasticsearch container started"
+
+      - name: Wait for Elasticsearch Ready
+        timeout-minutes: 2
+        run: |
+          echo "Waiting for Elasticsearch to be ready..."
+
+          for i in {1..30}; do
+            if curl -sf http://localhost:9200/_cluster/health > /dev/null 2>&1; then
+              echo "✓ Elasticsearch is ready"
+              curl http://localhost:9200/_cluster/health | jq .
+              exit 0
+            fi
+            echo "  Attempt $i/30: waiting..."
+            sleep 2
+          done
+
+          echo "ERROR: Elasticsearch failed to start"
+          exit 1
+
+      - name: Execute Detection Tests
+        id: execute_tests
+        timeout-minutes: 5
+        run: |
+          echo "Running integration tests with test payloads..."
+
+          set -e
+          python3 scripts/execute_detection_tests.py \
+            --rules-dir generated/detection_rules \
+            --es-url http://localhost:9200
+
+          echo "✓ Integration tests completed"
+
+      - name: Check Test Results
+        id: test_check
+        if: always()
+        run: |
+          if [ ! -f test_results.json ]; then
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "precision=0" >> $GITHUB_OUTPUT
+            echo "recall=0" >> $GITHUB_OUTPUT
+            echo "f1_score=0" >> $GITHUB_OUTPUT
+            echo "ERROR: No test results file found"
+            exit 1
+          fi
+
+          #extract metrics from test results
+          PRECISION=$(jq -r '.overall_metrics.precision' test_results.json)
+          RECALL=$(jq -r '.overall_metrics.recall' test_results.json)
+          F1=$(jq -r '.overall_metrics.f1_score' test_results.json)
+
+          echo "precision=$PRECISION" >> $GITHUB_OUTPUT
+          echo "recall=$RECALL" >> $GITHUB_OUTPUT
+          echo "f1_score=$F1" >> $GITHUB_OUTPUT
+
+          #check if passed quality thresholds
+          #precision >= 0.60, recall >= 0.70
+          PASS="true"
+          if (( $(echo "$PRECISION < 0.60" | bc -l) )); then
+            echo "⚠️  Precision $PRECISION below threshold 0.60"
+            PASS="false"
+          fi
+
+          if (( $(echo "$RECALL < 0.70" | bc -l) )); then
+            echo "⚠️  Recall $RECALL below threshold 0.70"
+            PASS="false"
+          fi
+
+          echo "passed=$PASS" >> $GITHUB_OUTPUT
+
+          if [ "$PASS" == "true" ]; then
+            echo "✓ Tests passed quality thresholds"
+          else
+            echo "⚠️  Tests did not meet quality thresholds"
+          fi
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: test_results.json
+          retention-days: 30
+
+      - name: Cleanup Elasticsearch
+        if: always()
+        run: |
+          docker stop elasticsearch || true
+          docker rm elasticsearch || true
+
+  #step 3: TTP intent validation (optional)
+  ttp-validation:
+    name: TTP Intent Validation
+    needs: [integration-test]
+    if: always() && inputs.run_ttp_validator && (needs.integration-test.result == 'success' || needs.integration-test.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      validation_passed: ${{ steps.ttp_check.outputs.passed }}
+      valid_count: ${{ steps.ttp_check.outputs.valid_count }}
+      invalid_count: ${{ steps.ttp_check.outputs.invalid_count }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Download Detection Rules
+        uses: actions/download-artifact@v4
+        with:
+          name: detection-rules
+          path: generated/
+          run-id: ${{ inputs.skip_generation && inputs.existing_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run TTP Intent Validator
+        id: run_validator
+        timeout-minutes: 8
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+          GOOGLE_CLOUD_LOCATION: ${{ secrets.GOOGLE_CLOUD_LOCATION }}
+        run: |
+          echo "Running TTP Intent Validator on generated rules..."
+
+          #run validator against all rule files
+          python3 scripts/test_ttp_validator.py generated/detection_rules > ttp_validation_report.txt 2>&1
+
+          #display results
+          cat ttp_validation_report.txt
+
+      - name: Check TTP Validation Results
+        id: ttp_check
+        if: always()
+        run: |
+          if [ ! -f ttp_validation_report.txt ]; then
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "valid_count=0" >> $GITHUB_OUTPUT
+            echo "invalid_count=0" >> $GITHUB_OUTPUT
+            echo "ERROR: No validation report found"
+            exit 1
+          fi
+
+          #extract counts from report
+          VALID=$(grep "✓ Valid:" ttp_validation_report.txt | awk '{print $3}' || echo 0)
+          INVALID=$(grep "✗ Invalid:" ttp_validation_report.txt | awk '{print $3}' || echo 0)
+
+          echo "valid_count=$VALID" >> $GITHUB_OUTPUT
+          echo "invalid_count=$INVALID" >> $GITHUB_OUTPUT
+
+          #check if all test cases are valid
+          if [ "$INVALID" -eq 0 ] && [ "$VALID" -gt 0 ]; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo "✓ All test cases valid"
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "⚠️  Found $INVALID invalid test cases"
+          fi
+
+      - name: Upload TTP Validation Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ttp-validation-report
+          path: ttp_validation_report.txt
+          retention-days: 30
+
+  #step 4: aggregate results and generate final report
+  summary:
+    name: Pipeline Summary
+    needs: [generate, integration-test, ttp-validation]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download All Artifacts
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          path: pipeline_results/
+
+      - name: Generate Pipeline Report
+        if: always()
+        run: |
+          echo "======================================" | tee pipeline_summary.md
+          echo "END-TO-END PIPELINE TEST SUMMARY" | tee -a pipeline_summary.md
+          echo "======================================" | tee -a pipeline_summary.md
+          echo "" | tee -a pipeline_summary.md
+          echo "**Run ID:** ${{ github.run_id }}" | tee -a pipeline_summary.md
+          echo "**Timestamp:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee -a pipeline_summary.md
+          echo "" | tee -a pipeline_summary.md
+
+          #generation results
+          echo "## 1. Detection Rule Generation" | tee -a pipeline_summary.md
+          if [ "${{ needs.generate.result }}" == "success" ] || [ "${{ inputs.skip_generation }}" == "true" ]; then
+            if [ -d "pipeline_results/detection-rules/detection_rules" ]; then
+              RULE_COUNT=$(find pipeline_results/detection-rules/detection_rules -name "*.yml" 2>/dev/null | wc -l || echo 0)
+              echo "- **Status:** ✅ Success" | tee -a pipeline_summary.md
+              echo "- **Rules Generated:** $RULE_COUNT" | tee -a pipeline_summary.md
+            else
+              echo "- **Status:** ⚠️  Skipped (using existing)" | tee -a pipeline_summary.md
+            fi
+          else
+            echo "- **Status:** ❌ Failed" | tee -a pipeline_summary.md
+          fi
+          echo "" | tee -a pipeline_summary.md
+
+          #integration test results
+          echo "## 2. Integration Testing (Elasticsearch)" | tee -a pipeline_summary.md
+          if [ "${{ needs.integration-test.result }}" == "success" ]; then
+            echo "- **Status:** ✅ Success" | tee -a pipeline_summary.md
+            echo "- **Precision:** ${{ needs.integration-test.outputs.precision }}" | tee -a pipeline_summary.md
+            echo "- **Recall:** ${{ needs.integration-test.outputs.recall }}" | tee -a pipeline_summary.md
+            echo "- **F1 Score:** ${{ needs.integration-test.outputs.f1_score }}" | tee -a pipeline_summary.md
+
+            if [ "${{ needs.integration-test.outputs.test_passed }}" == "true" ]; then
+              echo "- **Quality:** ✅ Meets thresholds (Precision ≥ 0.60, Recall ≥ 0.70)" | tee -a pipeline_summary.md
+            else
+              echo "- **Quality:** ⚠️  Below thresholds" | tee -a pipeline_summary.md
+            fi
+          elif [ "${{ needs.integration-test.result }}" == "failure" ]; then
+            echo "- **Status:** ❌ Failed" | tee -a pipeline_summary.md
+          else
+            echo "- **Status:** ⏭️  Skipped" | tee -a pipeline_summary.md
+          fi
+          echo "" | tee -a pipeline_summary.md
+
+          #TTP validation results
+          echo "## 3. TTP Intent Validation" | tee -a pipeline_summary.md
+          if [ "${{ inputs.run_ttp_validator }}" == "true" ]; then
+            if [ "${{ needs.ttp-validation.result }}" == "success" ]; then
+              echo "- **Status:** ✅ Success" | tee -a pipeline_summary.md
+              echo "- **Valid Test Cases:** ${{ needs.ttp-validation.outputs.valid_count }}" | tee -a pipeline_summary.md
+              echo "- **Invalid Test Cases:** ${{ needs.ttp-validation.outputs.invalid_count }}" | tee -a pipeline_summary.md
+
+              if [ "${{ needs.ttp-validation.outputs.validation_passed }}" == "true" ]; then
+                echo "- **Result:** ✅ All test cases valid" | tee -a pipeline_summary.md
+              else
+                echo "- **Result:** ⚠️  Some invalid test cases found" | tee -a pipeline_summary.md
+              fi
+            elif [ "${{ needs.ttp-validation.result }}" == "failure" ]; then
+              echo "- **Status:** ❌ Failed" | tee -a pipeline_summary.md
+            else
+              echo "- **Status:** ⏭️  Skipped" | tee -a pipeline_summary.md
+            fi
+          else
+            echo "- **Status:** ⏭️  Disabled (run_ttp_validator=false)" | tee -a pipeline_summary.md
+          fi
+          echo "" | tee -a pipeline_summary.md
+
+          #overall status
+          echo "## Overall Pipeline Status" | tee -a pipeline_summary.md
+
+          OVERALL_STATUS="✅ PASS"
+
+          if [ "${{ needs.generate.result }}" == "failure" ] && [ "${{ inputs.skip_generation }}" != "true" ]; then
+            OVERALL_STATUS="❌ FAIL (Generation)"
+          elif [ "${{ needs.integration-test.result }}" == "failure" ]; then
+            OVERALL_STATUS="❌ FAIL (Integration Test)"
+          elif [ "${{ needs.integration-test.outputs.test_passed }}" != "true" ]; then
+            OVERALL_STATUS="⚠️  WARN (Quality Thresholds)"
+          elif [ "${{ inputs.run_ttp_validator }}" == "true" ] && [ "${{ needs.ttp-validation.outputs.validation_passed }}" != "true" ]; then
+            OVERALL_STATUS="⚠️  WARN (TTP Validation)"
+          fi
+
+          echo "**$OVERALL_STATUS**" | tee -a pipeline_summary.md
+          echo "" | tee -a pipeline_summary.md
+
+          #artifacts
+          echo "## Artifacts" | tee -a pipeline_summary.md
+          echo "- Detection Rules: \`detection-rules\`" | tee -a pipeline_summary.md
+          echo "- Integration Test Results: \`integration-test-results\`" | tee -a pipeline_summary.md
+          if [ "${{ inputs.run_ttp_validator }}" == "true" ]; then
+            echo "- TTP Validation Report: \`ttp-validation-report\`" | tee -a pipeline_summary.md
+          fi
+          echo "" | tee -a pipeline_summary.md
+
+          #display summary
+          cat pipeline_summary.md
+
+          #add to GitHub job summary
+          cat pipeline_summary.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Pipeline Summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-summary
+          path: pipeline_summary.md
+          retention-days: 30
+
+      - name: Fail Job if Pipeline Failed
+        if: always()
+        run: |
+          #fail this job if critical steps failed
+          if [ "${{ needs.generate.result }}" == "failure" ] && [ "${{ inputs.skip_generation }}" != "true" ]; then
+            echo "❌ Pipeline failed at generation step"
+            exit 1
+          elif [ "${{ needs.integration-test.result }}" == "failure" ]; then
+            echo "❌ Pipeline failed at integration test step"
+            exit 1
+          fi
+
+          #warn but don't fail on quality issues
+          if [ "${{ needs.integration-test.outputs.test_passed }}" != "true" ]; then
+            echo "⚠️  Warning: Detection quality below thresholds"
+          fi
+
+          if [ "${{ inputs.run_ttp_validator }}" == "true" ] && [ "${{ needs.ttp-validation.outputs.validation_passed }}" != "true" ]; then
+            echo "⚠️  Warning: TTP validation found issues"
+          fi
+
+          echo "✓ Pipeline completed (check warnings above)"
