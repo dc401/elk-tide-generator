@@ -16,6 +16,57 @@ def load_rule(rule_path: Path) -> Dict:
     with open(rule_path, 'r') as f:
         return yaml.safe_load(f)
 
+def create_test_index(es: Elasticsearch, index: str):
+    """create test index with mapping that supports wildcard queries"""
+    mapping = {
+        "mappings": {
+            "properties": {
+                "event": {
+                    "properties": {
+                        "category": {"type": "keyword"},
+                        "type": {"type": "keyword"},
+                        "code": {"type": "keyword"},
+                        "action": {"type": "keyword"},
+                        "outcome": {"type": "keyword"}
+                    }
+                },
+                "process": {
+                    "properties": {
+                        "name": {"type": "wildcard"},  #supports wildcard queries
+                        "command_line": {"type": "wildcard"},  #supports wildcard queries
+                        "executable": {"type": "keyword"}
+                    }
+                },
+                "file": {
+                    "properties": {
+                        "name": {"type": "wildcard"},
+                        "path": {"type": "keyword"},
+                        "extension": {"type": "keyword"}
+                    }
+                },
+                "cloud": {
+                    "properties": {
+                        "provider": {"type": "keyword"},
+                        "account": {"type": "nested"}
+                    }
+                },
+                "gcp": {
+                    "properties": {
+                        "audit": {"type": "nested"}
+                    }
+                },
+                "@timestamp": {"type": "date"}
+            }
+        }
+    }
+
+    #delete index if exists
+    if es.indices.exists(index=index):
+        es.indices.delete(index=index)
+
+    #create with mapping
+    es.indices.create(index=index, body=mapping)
+
 def ingest_test_payload(es: Elasticsearch, index: str, log_entry: Dict) -> str:
     """ingest single test payload into ES"""
     response = es.index(
@@ -91,8 +142,11 @@ def test_rule(es: Elasticsearch, rule: Dict, rule_name: str) -> Dict:
     print(f"Query: {query}")
     print(f"Test cases: {len(test_cases)}")
 
-    #create test index
+    #create test index with proper mapping
     index_name = f"test-{rule_name.lower().replace(' ', '-').replace('_', '-')}"
+
+    print(f"  Creating index with wildcard field mapping...")
+    create_test_index(es, index_name)
 
     results = {'TP': 0, 'FN': 0, 'FP': 0, 'TN': 0}
     details = []
