@@ -281,20 +281,49 @@ jobs:
           run-id: ${{ inputs.skip_generation && inputs.existing_run_id || github.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run TTP Intent Validator
+      - name: Run TTP Intent Validator (with region retry)
         id: run_validator
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
-          GOOGLE_CLOUD_LOCATION: ${{ needs.generate.outputs.selected_region }}
         run: |
           echo "Running TTP Intent Validator on generated rules..."
+          echo "Timeout: 20 minutes (with region retry)"
 
-          #run validator against all rule files
-          python3 scripts/test_ttp_validator.py generated/detection_rules > ttp_validation_report.txt 2>&1
+          #retry up to 3 times with different regions on quota exhaustion
+          MAX_RETRIES=3
+          for RETRY in $(seq 0 $((MAX_RETRIES-1))); do
+            #select region based on retry count (shifts to next region each retry)
+            SELECTED_REGION=$(python3 scripts/select_region.py $RETRY)
+            echo "Attempt $((RETRY+1))/$MAX_RETRIES using region: $SELECTED_REGION"
 
-          #display results
-          cat ttp_validation_report.txt
+            export GOOGLE_CLOUD_LOCATION=$SELECTED_REGION
+
+            if timeout 15m python3 scripts/test_ttp_validator.py generated/detection_rules > ttp_validation_report.txt 2>&1; then
+              echo "✓ TTP validation successful with region: $SELECTED_REGION"
+              cat ttp_validation_report.txt
+              exit 0
+            fi
+
+            #check if error was quota-related (429) or timeout
+            if grep -q "429.*RESOURCE_EXHAUSTED\|quota.*exhausted" ttp_validation_report.txt; then
+              echo "⚠️  Quota exhausted in $SELECTED_REGION"
+              if [ $RETRY -lt $((MAX_RETRIES-1)) ]; then
+                echo "   Retrying with next region..."
+                sleep 5
+                continue
+              else
+                echo "❌ All regions exhausted quota"
+                cat ttp_validation_report.txt
+                exit 1
+              fi
+            else
+              #non-quota error or timeout, fail immediately
+              echo "❌ TTP validation failed (non-quota error or timeout)"
+              cat ttp_validation_report.txt
+              exit 1
+            fi
+          done
 
       - name: Check TTP Validation Results
         id: ttp_check

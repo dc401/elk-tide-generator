@@ -11,10 +11,6 @@ on:
         required: true
       GCP_PROJECT_ID:
         required: true
-    outputs:
-      selected_region:
-        description: 'Dynamically selected GCP region for this run'
-        value: ${{ jobs.generate-rules.outputs.region }}
   push:
     branches: [main]
     paths:
@@ -30,8 +26,6 @@ jobs:
     name: Generate Elasticsearch Detection Rules from CTI
     runs-on: ubuntu-latest
     timeout-minutes: 60  #increased for larger CTI files with more indicators
-    outputs:
-      region: ${{ steps.select_region.outputs.region }}
 
     steps:
       - name: Checkout code
@@ -114,30 +108,50 @@ jobs:
             echo "  - $file ($SIZE)"
           done
 
-      - name: Select Region (Round-Robin)
-        id: select_region
-        run: |
-          SELECTED_REGION=$(python3 scripts/select_region.py)
-          echo "region=$SELECTED_REGION" >> $GITHUB_OUTPUT
-          echo "Selected region for this run: $SELECTED_REGION"
-
-      - name: Generate Detection Rules
-        timeout-minutes: 15
+      - name: Generate Detection Rules (with region retry)
+        timeout-minutes: 20
         env:
           GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
-          GOOGLE_CLOUD_LOCATION: ${{ steps.select_region.outputs.region }}
           GOOGLE_GENAI_USE_VERTEXAI: 'true'
         run: |
           echo "Starting Elasticsearch detection rule generation..."
-          echo "Using region: ${{ steps.select_region.outputs.region }}"
-          echo "Timeout: 15 minutes (with self-healing refinement)"
+          echo "Timeout: 20 minutes (with self-healing refinement + region retry)"
 
-          set -e  # Exit immediately on any error
-          python run_agent.py \
-            --cti-folder cti_src \
-            --output generated \
-            --project ${{ secrets.GCP_PROJECT_ID }} \
-            --location ${{ steps.select_region.outputs.region }}
+          #retry up to 3 times with different regions on quota exhaustion
+          MAX_RETRIES=3
+          for RETRY in $(seq 0 $((MAX_RETRIES-1))); do
+            #select region based on retry count (shifts to next region each retry)
+            SELECTED_REGION=$(python3 scripts/select_region.py $RETRY)
+            echo "Attempt $((RETRY+1))/$MAX_RETRIES using region: $SELECTED_REGION"
+
+            export GOOGLE_CLOUD_LOCATION=$SELECTED_REGION
+
+            if python run_agent.py \
+              --cti-folder cti_src \
+              --output generated \
+              --project ${{ secrets.GCP_PROJECT_ID }} \
+              --location $SELECTED_REGION 2>&1 | tee generation.log; then
+              echo "✓ Generation successful with region: $SELECTED_REGION"
+              exit 0
+            fi
+
+            #check if error was quota-related (429)
+            if grep -q "429.*RESOURCE_EXHAUSTED\|quota.*exhausted" generation.log; then
+              echo "⚠️  Quota exhausted in $SELECTED_REGION"
+              if [ $RETRY -lt $((MAX_RETRIES-1)) ]; then
+                echo "   Retrying with next region..."
+                sleep 5
+                continue
+              else
+                echo "❌ All regions exhausted quota"
+                exit 1
+              fi
+            else
+              #non-quota error, fail immediately
+              echo "❌ Generation failed with non-quota error"
+              exit 1
+            fi
+          done
 
       - name: Verify Generated Rules
         run: |
