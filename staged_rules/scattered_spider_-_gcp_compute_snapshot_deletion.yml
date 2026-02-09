@@ -1,18 +1,17 @@
 name: Scattered Spider - GCP Compute Snapshot Deletion
-description: Detects attempts by Scattered Spider to delete Google Cloud Platform
-  (GCP) compute snapshots. This action is a common anti-forensics technique to inhibit
-  system recovery and destroy potential recovery points, increasing the impact of
-  a RansomOp.
+description: Detects attempts by Scattered Spider or other threat actors to delete
+  Google Cloud Platform (GCP) compute snapshots. This action is a common technique
+  to destroy backups and inhibit system recovery, increasing the impact of an attack.
 type: query
 query: event.category:api AND cloud.provider:gcp AND event.action:compute.snapshots.delete
   AND event.outcome:success
 language: lucene
 index:
+- gcp.audit.admin
 - logs-*
-- gcp.auditlog-*
 filters: []
-risk_score: 85
-severity: high
+risk_score: 90
+severity: critical
 threat:
 - framework: MITRE ATT&CK
   tactic:
@@ -23,24 +22,31 @@ threat:
   - id: T1485
     name: Data Destruction
     reference: https://attack.mitre.org/techniques/T1485/
-  - id: T1562.008
-    name: Deactivate or Modify Cloud Logs
-    reference: https://attack.mitre.org/techniques/T1562/008/
+- framework: MITRE ATT&CK
+  tactic:
+    id: TA0005
+    name: Defense Evasion
+    reference: https://attack.mitre.org/tactics/TA0005/
+  technique:
+  - id: T1562.003
+    name: 'Impair Defenses: Impair Command History Logging'
+    reference: https://attack.mitre.org/techniques/T1562/003/
 references:
 - https://attack.mitre.org/techniques/T1485/
-- https://attack.mitre.org/techniques/T1562/008/
+- https://attack.mitre.org/techniques/T1562/003/
+- https://cloud.google.com/logging/docs/audit/audit-log-fields
 - https://www.elastic.co/guide/en/ecs/current/ecs-cloud.html
-- https://cloud.google.com/compute/docs/reference/rest/v1/snapshots/delete
 author:
 - Detection Agent
 false_positives:
-- Legitimate administrators deleting old or unused snapshots for cost optimization
-  or data retention policies.
+- Legitimate backup rotation or cleanup by administrators or automated processes.
 note: '## Triage
 
-  Investigate: the user account performing the deletion, the timing of the action,
-  and whether it aligns with known maintenance windows or approved changes. Deletion
-  of critical snapshots should be immediately escalated.'
+  Investigate: user identity, source IP, and timing of the API call. Confirm if the
+  deletion was authorized and part of a planned maintenance activity.
+
+  Escalate if: deletion is unexpected, performed by an unusual user, or outside of
+  normal operational hours.'
 test_cases:
 - type: TP
   description: Successful deletion of a GCP compute snapshot
@@ -51,14 +57,11 @@ test_cases:
       outcome: success
     cloud:
       provider: gcp
+      account:
+        id: gcp-project-12345
     user:
       name: malicious-user@example.com
-    gcp:
-      audit:
-        resource:
-          type: compute.googleapis.com/Snapshot
-          name: critical-backup-snapshot
-    '@timestamp': '2024-03-12T22:40:00Z'
+    '@timestamp': '2024-03-12T22:20:00Z'
   expected_match: true
   evasion_technique: null
 - type: TP
@@ -70,71 +73,59 @@ test_cases:
       outcome: success
     cloud:
       provider: gcp
+      account:
+        id: gcp-project-12345
     user:
-      name: compromised-service-account@gcp-project.iam.gserviceaccount.com
-    gcp:
-      audit:
-        resource:
-          type: compute.googleapis.com/Snapshot
-          name: daily-snapshot-prod
-    '@timestamp': '2024-03-12T22:40:10Z'
+      name: compromised-service-account@gcp-project-12345.iam.gserviceaccount.com
+    '@timestamp': '2024-03-12T22:21:00Z'
   expected_match: true
   evasion_technique: null
 - type: FN
-  description: Deletion of a GCP disk image (not a snapshot)
+  description: Evasion by deleting the underlying disk instead of the snapshot
   log_entry:
     event:
       category: api
-      action: compute.images.delete
+      action: compute.disks.delete
       outcome: success
     cloud:
       provider: gcp
+      account:
+        id: gcp-project-12345
     user:
       name: malicious-user@example.com
-    gcp:
-      audit:
-        resource:
-          type: compute.googleapis.com/Image
-          name: golden-image-v1
-    '@timestamp': '2024-03-12T22:41:00Z'
+    '@timestamp': '2024-03-12T22:22:00Z'
   expected_match: false
-  evasion_technique: Targets disk images instead of snapshots. This rule is specific
-    to 'compute.snapshots.delete'.
+  evasion_technique: This rule specifically targets snapshot deletion API calls. Deleting
+    the underlying disk directly would bypass this rule.
 - type: FP
-  description: Legitimate admin deleting an old snapshot
+  description: Failed attempt to delete a GCP compute snapshot
   log_entry:
     event:
       category: api
       action: compute.snapshots.delete
-      outcome: success
+      outcome: failure
     cloud:
       provider: gcp
+      account:
+        id: gcp-project-12345
     user:
-      name: admin@example.com
-    gcp:
-      audit:
-        resource:
-          type: compute.googleapis.com/Snapshot
-          name: old-dev-snapshot-2023
-    '@timestamp': '2024-03-14T10:30:00Z'
+      name: legitimate-user@example.com
+    '@timestamp': '2024-03-14T11:00:00Z'
   expected_match: false
   evasion_technique: null
 - type: TN
-  description: Normal GCP API call (instance creation)
+  description: Benign GCP API call (listing instances)
   log_entry:
     event:
       category: api
-      action: compute.instances.insert
+      action: compute.instances.list
       outcome: success
     cloud:
       provider: gcp
+      account:
+        id: gcp-project-12345
     user:
-      name: dev-user@example.com
-    gcp:
-      audit:
-        resource:
-          type: compute.googleapis.com/Instance
-          name: new-dev-vm
-    '@timestamp': '2024-03-14T10:35:00Z'
+      name: monitoring-service-account@gcp-project-12345.iam.gserviceaccount.com
+    '@timestamp': '2024-03-14T11:05:00Z'
   expected_match: false
   evasion_technique: null
