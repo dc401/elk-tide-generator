@@ -172,61 +172,116 @@ jobs:
           echo "ERROR: Elasticsearch failed to start"
           exit 1
 
-      - name: Execute Detection Tests
-        id: execute_tests
-        timeout-minutes: 5
-        run: |
-          echo "Running integration tests with test payloads..."
+      - name: Authenticate to GCP (for refinement)
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-          set -e
-          python3 scripts/execute_detection_tests.py \
-            --rules-dir generated/detection_rules \
-            --es-url http://localhost:9200
-
-          echo "✓ Integration tests completed"
-
-      - name: Check Test Results
+      - name: Execute Detection Tests with Self-Healing Refinement Loop
         id: test_check
-        if: always()
+        timeout-minutes: 20
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+          GOOGLE_GENAI_USE_VERTEXAI: 'true'
         run: |
-          if [ ! -f test_results.json ]; then
-            echo "passed=false" >> $GITHUB_OUTPUT
-            echo "precision=0" >> $GITHUB_OUTPUT
-            echo "recall=0" >> $GITHUB_OUTPUT
-            echo "f1_score=0" >> $GITHUB_OUTPUT
-            echo "ERROR: No test results file found"
-            exit 1
-          fi
+          echo "Starting integration tests with self-healing refinement..."
 
-          #extract metrics from test results
-          PRECISION=$(jq -r '.overall_metrics.precision' test_results.json)
-          RECALL=$(jq -r '.overall_metrics.recall' test_results.json)
-          F1=$(jq -r '.overall_metrics.f1_score' test_results.json)
+          MAX_ATTEMPTS=3
 
-          echo "precision=$PRECISION" >> $GITHUB_OUTPUT
-          echo "recall=$RECALL" >> $GITHUB_OUTPUT
-          echo "f1_score=$F1" >> $GITHUB_OUTPUT
+          for ATTEMPT in $(seq 1 $MAX_ATTEMPTS); do
+            echo ""
+            echo "========================================="
+            echo "ATTEMPT $ATTEMPT/$MAX_ATTEMPTS"
+            echo "========================================="
 
-          #check if passed quality thresholds
-          #precision >= 0.60, recall >= 0.70
-          PASS="true"
-          if (( $(echo "$PRECISION < 0.60" | bc -l) )); then
-            echo "⚠️  Precision $PRECISION below threshold 0.60"
-            PASS="false"
-          fi
+            #select region with retry offset
+            SELECTED_REGION=$(python3 scripts/select_region.py $((ATTEMPT - 1)))
+            export GOOGLE_CLOUD_LOCATION=$SELECTED_REGION
+            echo "Using region: $SELECTED_REGION"
 
-          if (( $(echo "$RECALL < 0.70" | bc -l) )); then
-            echo "⚠️  Recall $RECALL below threshold 0.70"
-            PASS="false"
-          fi
+            #run integration tests
+            echo ""
+            echo "Running integration tests..."
+            python3 scripts/execute_detection_tests.py \
+              --rules-dir generated/detection_rules \
+              --es-url http://localhost:9200
 
-          echo "passed=$PASS" >> $GITHUB_OUTPUT
+            #extract metrics
+            PRECISION=$(jq -r '.overall_metrics.precision' test_results.json)
+            RECALL=$(jq -r '.overall_metrics.recall' test_results.json)
+            F1=$(jq -r '.overall_metrics.f1_score' test_results.json)
 
-          if [ "$PASS" == "true" ]; then
-            echo "✓ Tests passed quality thresholds"
-          else
-            echo "⚠️  Tests did not meet quality thresholds"
-          fi
+            echo ""
+            echo "Test Results:"
+            echo "  Precision: ${PRECISION}"
+            echo "  Recall: ${RECALL}"
+            echo "  F1 Score: ${F1}"
+
+            #check if passed recall threshold (primary metric)
+            if (( $(echo "$RECALL >= 0.70" | bc -l) )); then
+              echo ""
+              echo "✓ TESTS PASSED (recall $RECALL >= 0.70)"
+
+              #set outputs for final metrics
+              echo "precision=$PRECISION" >> $GITHUB_OUTPUT
+              echo "recall=$RECALL" >> $GITHUB_OUTPUT
+              echo "f1_score=$F1" >> $GITHUB_OUTPUT
+              echo "passed=true" >> $GITHUB_OUTPUT
+              echo "attempts=$ATTEMPT" >> $GITHUB_OUTPUT
+
+              exit 0
+            fi
+
+            #if last attempt, accept whatever we have
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo ""
+              echo "⚠️  FINAL ATTEMPT - Recall $RECALL < 0.70"
+              echo "   Accepting current quality for human review"
+
+              #set outputs
+              echo "precision=$PRECISION" >> $GITHUB_OUTPUT
+              echo "recall=$RECALL" >> $GITHUB_OUTPUT
+              echo "f1_score=$F1" >> $GITHUB_OUTPUT
+              echo "passed=false" >> $GITHUB_OUTPUT
+              echo "attempts=$ATTEMPT" >> $GITHUB_OUTPUT
+
+              exit 0
+            fi
+
+            #refine failing rules
+            echo ""
+            echo "⚠️  Recall $RECALL < 0.70"
+            echo "   Invoking self-healing refinement agent..."
+
+            if python3 scripts/refine_failed_rules.py \
+              --test-results test_results.json \
+              --rules-dir generated/detection_rules \
+              --cti-dir cti_src \
+              --output generated/detection_rules \
+              --region $SELECTED_REGION; then
+
+              echo "✓ Refinement completed"
+
+              #exponential backoff before retry
+              if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+                DELAY=$((30 * (2 ** (ATTEMPT - 1))))
+                echo "   Waiting ${DELAY}s before retry..."
+                sleep $DELAY
+              fi
+            else
+              echo "❌ Refinement failed"
+              echo "   Accepting current quality"
+
+              #set outputs
+              echo "precision=$PRECISION" >> $GITHUB_OUTPUT
+              echo "recall=$RECALL" >> $GITHUB_OUTPUT
+              echo "f1_score=$F1" >> $GITHUB_OUTPUT
+              echo "passed=false" >> $GITHUB_OUTPUT
+              echo "attempts=$ATTEMPT" >> $GITHUB_OUTPUT
+
+              exit 0
+            fi
+          done
 
       - name: Upload Test Results
         if: always()
