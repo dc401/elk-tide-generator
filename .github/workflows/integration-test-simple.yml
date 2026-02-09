@@ -84,8 +84,19 @@ jobs:
           echo "xpack.security.enabled: false" | sudo tee -a /etc/elasticsearch/elasticsearch.yml
           echo "xpack.security.enrollment.enabled: false" | sudo tee -a /etc/elasticsearch/elasticsearch.yml
 
+          # Set memory limits for GitHub runner
+          echo "-Xms512m" | sudo tee -a /etc/elasticsearch/jvm.options.d/heap.options
+          echo "-Xmx512m" | sudo tee -a /etc/elasticsearch/jvm.options.d/heap.options
+
           # Start service
           sudo systemctl start elasticsearch
+
+          # Check if it started (don't fail immediately)
+          if ! sudo systemctl is-active --quiet elasticsearch; then
+            echo "⚠️  Elasticsearch failed to start, checking logs..."
+            sudo journalctl -xeu elasticsearch.service --no-pager | tail -50
+            exit 1
+          fi
 
           echo "✓ Elasticsearch configured and started"
 
