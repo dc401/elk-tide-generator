@@ -1,12 +1,14 @@
 # Elasticsearch Detection Agent - Automated SIEM Detection Engineering
 
-Production-ready automated detection engineering solution that converts CTI intelligence → Elasticsearch Detection Rules with comprehensive multi-level validation and self-healing refinement.
+Production-ready automated detection engineering solution that converts CTI intelligence → Elasticsearch Detection Rules with comprehensive multi-level validation, TTP-aligned testing, and self-healing refinement.
 
 ## Features
 
 - **Native Elasticsearch Format:** Detection rules in Elasticsearch Detection API format (Lucene queries + ECS fields)
 - **Multi-Level Smart Refinement:** Auto-fixes rules at validation, integration test, and LLM judge stages
-- **Automated Testing:** 3-stage validation + integration testing with native Elasticsearch
+- **TTP Intent Validation:** Gemini-powered validation ensures test payloads match real-world attack patterns
+- **End-to-End Testing:** Single-command pipeline testing with comprehensive reporting
+- **Automated Testing:** 3-stage validation + integration testing with ephemeral Elasticsearch (Docker)
 - **Empirical LLM Judge:** Quality evaluation based on actual SIEM test results
 - **YAML-First I/O:** All rules and outputs in YAML (easier for LLMs and humans)
 - **Security Hardened:** OWASP LLM Top 10 protection, input validation, output sanitization
@@ -19,21 +21,27 @@ CTI Files → Detection Agent → Elasticsearch Detection Rules (YAML)
                                         ↓
             STAGE 1: Validation (with auto-refinement)
             ├─ Lucene syntax check
-            ├─ YAML → JSON conversion
+            ├─ ECS field validation (1990 fields)
+            ├─ Iterative field research (3 attempts)
             └─ LLM schema validator (research-backed)
                                         ↓
             STAGE 2: Integration Testing (with auto-refinement)
-            ├─ Deploy to native Elasticsearch
+            ├─ Deploy to ephemeral Elasticsearch (Docker)
             ├─ Ingest TP/FN/FP/TN test payloads
             ├─ Calculate precision/recall metrics
             └─ Smart decision: Fix QUERY or TEST CASES
                                         ↓
             STAGE 3: LLM Judge (with auto-refinement)
             ├─ Empirical evaluation (actual test results)
-            ├─ Quality scoring (≥0.70 threshold)
+            ├─ Quality scoring (≥0.75 threshold)
             └─ Deployment decision: APPROVE/REFINE/REJECT
                                         ↓
-                    Human Review → Production
+            STAGE 3.5: TTP Intent Validation (optional)
+            ├─ Validate test payload realism
+            ├─ Check command syntax & TTP alignment
+            └─ Research-backed recommendations
+                                        ↓
+                    Staging → Human Review → Production
 ```
 
 ## Prerequisites
@@ -42,9 +50,9 @@ CTI Files → Detection Agent → Elasticsearch Detection Rules (YAML)
 - GCP account with Vertex AI enabled (for Gemini API)
 - GitHub account (for CI/CD)
 - git CLI
+- gh CLI (GitHub CLI)
 - gcloud CLI ([installation guide](https://cloud.google.com/sdk/docs/install))
-
-**Note:** Elasticsearch is installed automatically via native packages during integration testing (no Docker required).
+- Docker (for integration testing with Elasticsearch)
 
 ## Quick Setup
 
@@ -52,7 +60,7 @@ CTI Files → Detection Agent → Elasticsearch Detection Rules (YAML)
 
 ```bash
 #clone and navigate to project
-git clone https://github.com/yourusername/adk-tide-generator.git
+git clone https://github.com/dc401/adk-tide-generator.git
 cd adk-tide-generator
 
 #run interactive bootstrap
@@ -80,6 +88,7 @@ pip install -r requirements.txt
 
 #3. configure GCP
 export GOOGLE_CLOUD_PROJECT="your-project-id"
+export GOOGLE_CLOUD_LOCATION="us-central1"
 gcloud auth application-default login
 
 #4. add CTI files
@@ -113,13 +122,14 @@ Prompts you for:
 python run_agent.py \
   --cti-folder cti_src \
   --output generated \
-  --project YOUR_GCP_PROJECT
+  --project YOUR_GCP_PROJECT \
+  --location us-central1
 ```
 
 ### With Self-Healing Refinement (Default)
 
 ```bash
-#refinement enabled by default (max 3 iterations if 0 rules pass)
+#refinement enabled by default (max 3 iterations per rule)
 python run_agent.py --cti-folder cti_src --output generated
 ```
 
@@ -127,6 +137,37 @@ python run_agent.py --cti-folder cti_src --output generated
 
 ```bash
 python run_agent.py --cti-folder cti_src --output generated --no-refinement
+```
+
+## End-to-End Testing
+
+### Run Complete Pipeline (Recommended)
+
+```bash
+#test everything: generation → integration → TTP validation → summary
+gh workflow run end-to-end-test.yml
+
+#watch progress
+gh run watch
+```
+
+See [END_TO_END_TEST.md](END_TO_END_TEST.md) for detailed usage and configuration options.
+
+### Reuse Existing Rules
+
+```bash
+#skip generation, test existing artifacts
+gh workflow run end-to-end-test.yml \
+  -f skip_generation=true \
+  -f existing_run_id=<RUN_ID>
+```
+
+### Quick Integration Test Only
+
+```bash
+#disable TTP validation for faster testing
+gh workflow run end-to-end-test.yml \
+  -f run_ttp_validator=false
 ```
 
 ## Validation & Testing
@@ -142,27 +183,29 @@ python scripts/validate_rules.py \
 
 Validates:
 - Lucene syntax (deterministic)
+- ECS field existence (1990 fields)
+- ECS field research (3 attempts if invalid)
 - YAML → JSON conversion
 - LLM schema validation (research-backed)
 
-Auto-refines up to 2 times per rule if failures occur.
+Auto-refines up to 3 times per rule if failures occur.
 
 ### Stage 2: Integration Testing
 
 ```bash
-python scripts/integration_test_ci.py \
+python scripts/execute_detection_tests.py \
   --rules-dir generated/detection_rules \
-  --project YOUR_GCP_PROJECT
+  --es-url http://localhost:9200
 ```
 
 Tests:
-- Deploys rules to native Elasticsearch
+- Deploys rules to Elasticsearch (Docker container)
 - Ingests TP/FN/FP/TN test payloads
-- Calculates precision/recall
+- Calculates precision/recall/F1/accuracy
 - Smart decision: Fix query OR test cases
 
-Requires:
-- Precision ≥ 0.80 (max 20% false positives)
+Quality Thresholds:
+- Precision ≥ 0.60 (max 40% false positives)
 - Recall ≥ 0.70 (catch at least 70% of attacks)
 
 ### Stage 3: LLM Judge Evaluation
@@ -175,21 +218,38 @@ python scripts/run_llm_judge.py \
 ```
 
 Evaluates:
-- Quality score based on actual test results
+- Quality score based on actual test results (≥0.75 threshold)
 - Deployment recommendation (APPROVE/REFINE/REJECT)
 - Refines based on judge feedback if needed
+
+### Stage 3.5: TTP Intent Validation
+
+```bash
+python scripts/test_ttp_validator.py generated/detection_rules
+```
+
+Validates:
+- Command syntax realism (would it work in real attack?)
+- TTP alignment (does payload match MITRE technique?)
+- Field value realism (realistic log values?)
+- Evasion technique validity (FN cases)
+
+Outputs:
+- Valid/invalid test case counts
+- High/medium/low confidence scores
+- Research-backed recommendations for invalid cases
 
 ## Multi-Level Refinement System
 
 The system automatically refines rules at each failure stage:
 
 ### Validation Refinement
-- **Trigger:** Lucene syntax errors, schema violations
-- **Fix:** Corrects operators, ECS field names, MITRE references
-- **Attempts:** Max 2 per rule
+- **Trigger:** Lucene syntax errors, ECS field errors, schema violations
+- **Fix:** Corrects operators, researches ECS fields, fixes MITRE references
+- **Attempts:** Max 3 per rule
 
 ### Integration Test Refinement
-- **Trigger:** Precision < 0.80 or Recall < 0.70
+- **Trigger:** Precision < 0.60 or Recall < 0.70
 - **Smart Decision:** Analyzes if QUERY or TEST CASES need fixing
 - **Fix:** Refines query logic OR updates test payloads
 - **Attempts:** Max 2 per rule
@@ -199,7 +259,7 @@ The system automatically refines rules at each failure stage:
 - **Fix:** Applies judge's specific recommendations
 - **Attempts:** Max 2 per rule
 
-See [MULTI_LEVEL_REFINEMENT.md](MULTI_LEVEL_REFINEMENT.md) for detailed documentation.
+See [docs/milestones/ITERATIVE_VALIDATION_SUCCESS.md](docs/milestones/ITERATIVE_VALIDATION_SUCCESS.md) for detailed documentation.
 
 ## Project Structure
 
@@ -207,50 +267,98 @@ See [MULTI_LEVEL_REFINEMENT.md](MULTI_LEVEL_REFINEMENT.md) for detailed document
 adk-tide-generator/
 ├── detection_agent/               #core detection generation logic
 │   ├── agent.py                   #main detection agent (5 stages)
-│   ├── refinement.py              #pipeline-level refinement wrapper
-│   ├── per_rule_refinement.py     #granular per-rule refinement
 │   ├── prompts/                   #LLM prompts (external files)
-│   │   ├── security_guard.md      #OWASP LLM Top 10 protection
-│   │   ├── detection_generator.md #rule generation with research
+│   │   ├── detection_generator.md #rule generation with ECS research
 │   │   ├── validator.md           #rule validation with research
-│   │   └── evaluator.md           #test case generation
+│   │   ├── security_scan.md       #OWASP LLM Top 10 protection
+│   │   └── ttp_validator_prompt.md #TTP intent validation guide
 │   ├── schemas/                   #Pydantic schemas
-│   │   └── detection_rule.py      #ES Detection Rule schema
+│   │   ├── detection_rule.py      #ES Detection Rule schema
+│   │   └── ecs_flat.yml           #1990 ECS fields
 │   └── tools/                     #custom tools
-│       └── load_cti_files.py      #CTI file loader (PDF/DOCX/TXT/MD)
+│       ├── load_cti_files.py      #CTI file loader (PDF/DOCX/TXT/MD)
+│       ├── validate_lucene.py     #Lucene syntax validator
+│       ├── validate_ecs_fields.py #ECS field validator
+│       ├── research_ecs_field.py  #ECS field research tool
+│       ├── iterative_validator.py #3-attempt validation wrapper
+│       └── ttp_intent_validator.py #TTP test payload validator
 │
 ├── scripts/                       #validation and testing scripts
 │   ├── bootstrap.sh               #interactive setup script
 │   ├── validate_rules.py          #3-stage validation with refinement
-│   ├── integration_test_ci.py     #ES integration testing with refinement
+│   ├── execute_detection_tests.py #ES integration testing
+│   ├── integration_test_ci.py     #CI integration wrapper
 │   ├── run_llm_judge.py           #empirical LLM judge with refinement
+│   ├── test_ttp_validator.py      #TTP validator testing
+│   ├── demo_ttp_validation.py     #TTP validator demonstration
+│   ├── stage_passing_rules.py     #stage validated rules with UIDs
+│   ├── create_review_pr.py        #automated PR creation
+│   ├── deploy_local_demo.sh       #local deployment demo
 │   ├── cleanup_staging.sh         #clean temp artifacts
 │   ├── setup-gcp.sh               #GCP setup helper
 │   └── setup-github-secrets.sh    #GitHub secrets helper
 │
 ├── .github/workflows/             #CI/CD workflows
-│   └── generate-detections.yml    #main workflow (CTI → rules)
+│   ├── end-to-end-test.yml        #master orchestration (6-12 min)
+│   ├── generate-detections.yml    #rule generation (3-4 min)
+│   ├── integration-test-simple.yml #integration testing (1-2 min)
+│   ├── llm-judge.yml              #LLM quality evaluation
+│   ├── mock-deploy.yml            #mock SIEM deployment
+│   └── cleanup-stale-artifacts.yml #artifact cleanup
 │
 ├── cti_src/                       #CTI input files
 │   └── sample_cti.md              #example CTI file
 │
-├── generated/                     #agent outputs
+├── generated/                     #agent outputs (gitignored)
 │   ├── detection_rules/           #generated YAML rules
 │   ├── cti_context.yml            #CTI analysis context
-│   └── staging/                   #temp validation artifacts (gitignored)
+│   └── staging/                   #temp validation artifacts
+│
+├── production_rules/              #human-approved rules (deployed)
+│   └── *.yml                      #production detection rules
+│
+├── archived_rules/                #deployment history
+│   └── batch_*_deployed_*/        #audit trail with metadata
+│
+├── docs/                          #documentation
+│   ├── milestones/                #important milestone documentation
+│   │   ├── CORE_ECS_FIELD_FIX_SUCCESS.md
+│   │   ├── ITERATIVE_VALIDATION_SUCCESS.md
+│   │   ├── INTEGRATION_TEST_SUCCESS.md
+│   │   ├── MOCK_DEPLOYMENT_SUCCESS.md
+│   │   ├── STAGE_3_COMPLETE_PR_CREATED.md
+│   │   └── TTP_VALIDATOR_IMPROVEMENT_CYCLE.md
+│   └── archive/                   #session progress notes (historical)
 │
 ├── run_agent.py                   #CLI entry point
 ├── requirements.txt               #Python dependencies
-├── PROGRESS.md                    #development progress tracking
+├── README.md                      #this file
+├── END_TO_END_TEST.md             #end-to-end testing guide
+├── SESSION_SUMMARY.md             #comprehensive session summary
+├── BACKLOG.md                     #future improvements
 ├── TESTING_GUIDE.md               #testing documentation
-└── MULTI_LEVEL_REFINEMENT.md      #refinement system docs
+└── ARCHITECTURE_ELASTICSEARCH_NATIVE.md #technical architecture
 ```
 
-## GitHub Actions Workflow
+## GitHub Actions Workflows
 
-The main workflow (`.github/workflows/generate-detections.yml`) triggers on:
-- Manual dispatch
-- Push to `main` with CTI changes in `cti_src/`
+### 1. End-to-End Test (Master Orchestration)
+**File:** `.github/workflows/end-to-end-test.yml`
+**Trigger:** Manual dispatch
+**Runtime:** 6-12 minutes
+
+Orchestrates complete pipeline:
+1. Generate detection rules (or skip with existing run_id)
+2. Integration test with ephemeral Elasticsearch
+3. TTP Intent Validation (optional)
+4. Aggregate results into summary report
+
+See [END_TO_END_TEST.md](END_TO_END_TEST.md) for usage.
+
+### 2. Generate Detection Rules
+**File:** `.github/workflows/generate-detections.yml`
+**Trigger:** Manual dispatch or push to main with CTI changes
+**Runtime:** 3-4 minutes
 
 Workflow steps:
 1. Clean stale artifacts
@@ -259,7 +367,21 @@ Workflow steps:
 4. Check CTI files (security validation)
 5. Run detection agent with refinement
 6. Verify rule generation
-7. Commit generated rules back to repo
+7. Upload artifacts
+
+### 3. Integration Test (Simple)
+**File:** `.github/workflows/integration-test-simple.yml`
+**Trigger:** Manual dispatch with artifact_run_id
+**Runtime:** 1-2 minutes
+
+Tests generated rules with Docker Elasticsearch.
+
+### 4. Mock SIEM Deployment
+**File:** `.github/workflows/mock-deploy.yml`
+**Trigger:** PR merge to main
+**Runtime:** 2-3 minutes
+
+Demonstrates deployment to production (mock).
 
 ## Security Features
 
@@ -274,28 +396,33 @@ Workflow steps:
 - Path traversal prevention
 - Allowed file extensions only (.pdf, .txt, .md, .docx)
 - Suspicious filename detection
+- Max 50 files per run (DoS prevention)
 
 ### Output Sanitization
 - Removes injection patterns from generated rules
 - Validates Lucene syntax before writing
-- Schema validation with research grounding
+- ECS field validation with research grounding
+- Schema validation with research
 
 ## Cost Optimization
 
 ### Model Selection
-- **Gemini 2.5 Flash:** Rule generation (fast, cheap)
-- **Gemini 2.5 Pro:** Validation and judging (accurate)
+- **Gemini 2.5 Flash:** Rule generation (fast, cheap, $0.000075/1K input tokens)
+- **Gemini 2.5 Pro:** Validation, judging, TTP validation (accurate, $0.00125/1K input tokens)
 
 ### Quota Management
 - Inter-agent delay: 3.0s
 - Aggressive retry backoff
 - Session-level retry with exponential backoff
-- Max 3 pipeline iterations if 0 rules pass
+- Max 3 validation iterations per rule
+- Max 2 integration test iterations per rule
+- Max 2 judge iterations per rule
 
 ### Token Efficiency
 - External prompts (no inline repetition)
 - Truncated outputs (120k char limit)
 - State pruning between stages
+- Field research caching
 
 ## Testing
 
@@ -310,19 +437,35 @@ python scripts/validate_rules.py --rules-dir generated/detection_rules
 
 ### Integration Tests
 ```bash
-#test with native Elasticsearch
-python scripts/integration_test_ci.py \
+#test with Docker Elasticsearch
+docker run -d --name elasticsearch \
+  -p 9200:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+
+python scripts/execute_detection_tests.py \
   --rules-dir generated/detection_rules \
-  --skip-install  #if ES already installed
+  --es-url http://localhost:9200
 ```
 
-### End-to-End Test
+### End-to-End Test (GitHub Actions)
 ```bash
 #complete pipeline
-python run_agent.py --cti-folder cti_src --output generated
-python scripts/validate_rules.py --rules-dir generated/detection_rules
-python scripts/integration_test_ci.py --rules-dir generated/detection_rules
-python scripts/run_llm_judge.py --rules-dir generated/detection_rules
+gh workflow run end-to-end-test.yml
+
+#watch progress
+gh run watch
+
+#download results
+gh run download <RUN_ID>
+```
+
+### TTP Validator Test
+```bash
+#validate test payloads for production rules
+export GOOGLE_CLOUD_PROJECT=$(gcloud config get-value project)
+python scripts/test_ttp_validator.py production_rules/
 ```
 
 ## Troubleshooting
@@ -334,6 +477,10 @@ gcloud auth application-default login
 
 #verify project
 gcloud config get-value project
+
+#set project if not configured
+export GOOGLE_CLOUD_PROJECT="your-project-id"
+export GOOGLE_CLOUD_LOCATION="us-central1"
 ```
 
 ### Quota Exhaustion
@@ -355,6 +502,9 @@ python run_agent.py --interactive
 
 #disable refinement for debugging
 python run_agent.py --interactive --no-refinement
+
+#check session results
+cat session_results/detection_session_*.json | jq .
 ```
 
 ### Integration Test Failures
@@ -362,24 +512,84 @@ python run_agent.py --interactive --no-refinement
 #check Elasticsearch status
 curl http://localhost:9200/_cluster/health
 
-#manually restart ES
-sudo systemctl restart elasticsearch
+#manually restart Docker container
+docker restart elasticsearch
+
+#check Elasticsearch logs
+docker logs elasticsearch
+
+#check version compatibility (must be 8.12.0)
+grep "elasticsearch==" requirements.txt
+```
+
+### Elasticsearch Version Mismatch
+```bash
+#symptom: "Accept version must be either version 8 or 7, but found 9"
+#fix: ensure requirements.txt has correct versions
+elasticsearch==8.12.0
+elastic-transport==8.15.1
+```
+
+### TTP Validation Errors
+```bash
+#check GCP authentication
+gcloud auth application-default login
+
+#verify project is set
+echo $GOOGLE_CLOUD_PROJECT
+
+#run with explicit project
+python scripts/test_ttp_validator.py \
+  --project YOUR_PROJECT_ID \
+  generated/detection_rules/
 ```
 
 ## Documentation
 
-- [PROGRESS.md](PROGRESS.md) - Development progress and status
-- [TESTING_GUIDE.md](TESTING_GUIDE.md) - Comprehensive testing procedures
-- [MULTI_LEVEL_REFINEMENT.md](MULTI_LEVEL_REFINEMENT.md) - Refinement system architecture
-- [ARCHITECTURE_ELASTICSEARCH_NATIVE.md](ARCHITECTURE_ELASTICSEARCH_NATIVE.md) - Technical architecture details
+### Essential
+- [README.md](README.md) - This file
+- [END_TO_END_TEST.md](END_TO_END_TEST.md) - End-to-end testing guide
+- [SESSION_SUMMARY.md](SESSION_SUMMARY.md) - Comprehensive session summary
+- [BACKLOG.md](BACKLOG.md) - Future improvements roadmap
+- [TESTING_GUIDE.md](TESTING_GUIDE.md) - Testing procedures
+- [ARCHITECTURE_ELASTICSEARCH_NATIVE.md](ARCHITECTURE_ELASTICSEARCH_NATIVE.md) - Technical architecture
+
+### Milestones
+- [docs/milestones/CORE_ECS_FIELD_FIX_SUCCESS.md](docs/milestones/CORE_ECS_FIELD_FIX_SUCCESS.md) - ECS field fix milestone
+- [docs/milestones/ITERATIVE_VALIDATION_SUCCESS.md](docs/milestones/ITERATIVE_VALIDATION_SUCCESS.md) - Iterative validation system
+- [docs/milestones/INTEGRATION_TEST_SUCCESS.md](docs/milestones/INTEGRATION_TEST_SUCCESS.md) - Integration testing milestone
+- [docs/milestones/MOCK_DEPLOYMENT_SUCCESS.md](docs/milestones/MOCK_DEPLOYMENT_SUCCESS.md) - Mock deployment milestone
+- [docs/milestones/STAGE_3_COMPLETE_PR_CREATED.md](docs/milestones/STAGE_3_COMPLETE_PR_CREATED.md) - Human-in-the-loop workflow
+- [docs/milestones/TTP_VALIDATOR_IMPROVEMENT_CYCLE.md](docs/milestones/TTP_VALIDATOR_IMPROVEMENT_CYCLE.md) - TTP validator demonstration
+
+## Quality Metrics
+
+### Current Production Rules
+- **Rules Deployed:** 3 (Akira ransomware detection set)
+- **LLM Quality Scores:** 0.93-0.97 (all pass ≥0.75 threshold)
+- **Integration Test Precision:** 45.5%
+- **Integration Test Recall:** 62.5%
+- **TTP Validation Pass Rate:** 88% (15/17 valid initial, 100% after fixes)
+
+### Target Metrics
+- **Precision:** ≥ 0.60 (max 40% false positives)
+- **Recall:** ≥ 0.70 (catch at least 70% of attacks)
+- **LLM Quality Score:** ≥ 0.75
+- **TTP Validation:** 100% valid test cases
+
+See [BACKLOG.md](BACKLOG.md) for planned quality improvements.
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Test thoroughly (unit + integration)
-5. Submit a pull request
+4. Test thoroughly:
+   - Unit tests
+   - Integration tests
+   - End-to-end workflow test
+5. Update documentation
+6. Submit a pull request
 
 ## License
 
@@ -388,14 +598,17 @@ MIT License - See LICENSE file for details
 ## Support
 
 For issues and questions:
-- GitHub Issues: https://github.com/yourusername/adk-tide-generator/issues
+- GitHub Issues: https://github.com/dc401/adk-tide-generator/issues
 - Documentation: See docs/ folder
+- Session Summary: [SESSION_SUMMARY.md](SESSION_SUMMARY.md)
 
 ## Acknowledgments
 
 Built with:
 - Google Gemini 2.5 (Flash & Pro) via Vertex AI
-- Elasticsearch Detection Rule API
-- ECS (Elastic Common Schema)
+- Elasticsearch Detection Rule API (8.12.0)
+- ECS (Elastic Common Schema) 8.11
 - luqum (Lucene query parser)
 - Pydantic (schema validation)
+- GitHub Actions (CI/CD)
+- Docker (ephemeral testing infrastructure)

@@ -410,6 +410,100 @@ except InvalidResponse as e:
 
 ---
 
+### 7. Detection Quality Improvements
+**Priority:** High
+**Status:** Pending
+
+**Goal:** Improve detection precision and recall to meet quality thresholds without losing TTP intent or compromising test case realism.
+
+**Current Metrics (Akira Ransomware Rules):**
+- **Precision:** 45.5% (current) → Target: ≥ 60%
+- **Recall:** 62.5% (current) → Target: ≥ 70%
+- **LLM Quality Scores:** 0.93-0.97 (meeting ≥0.75 threshold ✅)
+- **TTP Validation:** 88% initial pass rate (100% after fixes)
+
+**Tasks:**
+
+1. **Analyze False Positives (6 FP cases):**
+   - Review each FP test case to identify why benign activity triggered
+   - Common causes:
+     - Detection query too broad (overly generic wildcards)
+     - Missing filter_legitimate conditions
+     - Core ECS fields not specific enough
+   - Proposed fixes:
+     - Add more specific field combinations (e.g., process.parent.name)
+     - Add exclusion filters for known benign processes
+     - Tighten wildcard patterns (use anchors where appropriate)
+
+2. **Analyze False Negatives (3 FN cases):**
+   - Review each FN evasion technique to validate realism
+   - Check if evasion is:
+     - **Realistic:** Would attackers actually use this technique?
+     - **Documentable:** Is this a known bypass from threat intel?
+     - **Addressable:** Can detection logic be broadened safely?
+   - Proposed fixes:
+     - Broaden detection patterns to cover variants
+     - Add alternate field combinations (e.g., original_file_name)
+     - Research documented evasions (MITRE, threat reports)
+
+3. **Tune Detection Queries:**
+   - **For Precision:** Add specificity without losing coverage
+     - Example: `process.command_line:*wmic*shadowcopy*delete*` AND `process.parent.name:cmd.exe`
+     - Example: Add `event.action:process_start` to reduce noise
+   - **For Recall:** Cover documented attack variations
+     - Example: Add alternate commands (vssadmin, wbadmin, bcdedit for T1490)
+     - Example: Cover both interactive and non-interactive modes
+
+4. **Validate with TTP Intent Validator:**
+   - Re-run TTP validator after each tuning iteration
+   - Ensure new test cases maintain 100% pass rate
+   - Prevent circular logic (query matching log because log matches query)
+
+5. **Iterative Improvement Workflow:**
+   ```
+   1. Identify FP/FN cases with low confidence
+   2. Research real-world attack patterns for those TTPs
+   3. Propose query refinements OR test case updates
+   4. Run TTP validator → ensure test case realism
+   5. Run integration test → measure new precision/recall
+   6. Repeat until thresholds met (Precision ≥ 60%, Recall ≥ 70%)
+   ```
+
+6. **Quality Gates:**
+   - **Do NOT sacrifice:**
+     - TTP alignment (test cases must match real attacks)
+     - Test case realism (validated by TTP intent validator)
+     - LLM quality scores (must stay ≥0.75)
+   - **Acceptable trade-offs:**
+     - Slightly lower recall if it significantly improves precision
+     - More complex queries if they reduce false positives
+     - Additional ECS fields if they improve accuracy
+
+**Files to modify:**
+- `production_rules/*.yml` - tune detection queries
+- `detection_agent/prompts/detection_generator.md` - add tuning guidance
+- `detection_agent/prompts/evaluator.md` - improve FP/FN generation
+- Integration test results → track improvement trends
+
+**Success Criteria:**
+- Precision ≥ 60% (max 40% false positives)
+- Recall ≥ 70% (catch at least 70% of attacks)
+- TTP validation: 100% valid test cases maintained
+- LLM quality scores: ≥ 0.75 maintained
+
+**Timeline:**
+- Iteration 1: Analyze current FP/FN cases (30 min)
+- Iteration 2: Tune 1 rule, validate, test (1 hour)
+- Iteration 3: Apply learnings to remaining rules (2 hours)
+- Iteration 4: Final validation and documentation (30 min)
+
+**Documentation:**
+- Create `docs/milestones/QUALITY_IMPROVEMENT_CYCLE.md` after completion
+- Document tuning patterns for future rule generation
+- Update SESSION_SUMMARY.md with final metrics
+
+---
+
 ## Completed Tasks
 
 ### ✅ Iterative Validation System (Stage 3.5)
