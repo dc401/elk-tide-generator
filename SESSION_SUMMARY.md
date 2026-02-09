@@ -55,6 +55,44 @@
 
 **Next:** Integrate into main pipeline after iterative validation (step 3.5), add regeneration loop for invalid payloads
 
+### 5. ✅ End-to-End Test Orchestration Workflow
+**Purpose:** Single command to test entire pipeline from CTI to production
+**Components:**
+- Master orchestration workflow (`.github/workflows/end-to-end-test.yml`)
+- Modified `generate-detections.yml` for reusability (`workflow_call` trigger)
+- Comprehensive documentation (`END_TO_END_TEST.md`)
+
+**Pipeline Flow:**
+1. Generate detection rules from CTI (or skip with existing run_id)
+2. Integration test with ephemeral Elasticsearch 8.12.0
+3. TTP Intent Validation with Gemini 2.5 Pro (optional)
+4. Aggregate results into summary report
+
+**Features:**
+- Skip generation option (reuse existing artifacts)
+- Configurable TTP validation (can be disabled)
+- Quality threshold checking (Precision ≥ 0.60, Recall ≥ 0.70)
+- Comprehensive summary report with all results
+- Job status outputs for downstream workflows
+
+**Usage:**
+```bash
+# Full pipeline
+gh workflow run end-to-end-test.yml
+
+# Reuse existing rules
+gh workflow run end-to-end-test.yml \
+  -f skip_generation=true \
+  -f existing_run_id=21810501531
+
+# Skip TTP validation
+gh workflow run end-to-end-test.yml \
+  -f run_ttp_validator=false
+```
+
+**Runtime:** 6-12 minutes (full pipeline)
+**Documentation:** `END_TO_END_TEST.md`
+
 ---
 
 ## 📊 Current Metrics
@@ -121,8 +159,9 @@ adk-tide-generator/
 │   ├── execute_detection_tests.py  # Integration test execution
 │   └── (other scripts)
 └── .github/workflows/
-    ├── generate-detections.yml     # Generate rules (3-4 min)
+    ├── generate-detections.yml     # Generate rules (3-4 min) + workflow_call support
     ├── integration-test-simple.yml # Test with ELK (1-2 min)
+    ├── end-to-end-test.yml         # ✅ NEW: Master orchestration (6-12 min)
     └── mock-deploy.yml             # ✅ NEW: Mock SIEM deployment
 ```
 
@@ -135,11 +174,12 @@ adk-tide-generator/
 2. **ITERATIVE_VALIDATION_SUCCESS.md** - Iterative validation system architecture
 3. **STAGE_3_COMPLETE_PR_CREATED.md** - Human-in-the-loop workflow operational
 4. **MOCK_DEPLOYMENT_SUCCESS.md** - Full end-to-end deployment demonstration
-5. **BACKLOG.md** - Future improvements roadmap
-6. **SESSION_SUMMARY.md** - This document
+5. **END_TO_END_TEST.md** - Master orchestration workflow guide
+6. **BACKLOG.md** - Future improvements roadmap
+7. **SESSION_SUMMARY.md** - This document
 
 ### Prompts & Guides
-7. **detection_agent/prompts/ttp_validator_prompt.md** - TTP intent validation guide (comprehensive)
+8. **detection_agent/prompts/ttp_validator_prompt.md** - TTP intent validation guide (comprehensive)
 
 ---
 
@@ -155,6 +195,7 @@ adk-tide-generator/
 - `scripts/test_ttp_validator.py` - Standalone TTP validator testing
 
 ### Workflows
+- `.github/workflows/end-to-end-test.yml` - Master orchestration workflow for full pipeline testing
 - `.github/workflows/mock-deploy.yml` - Automated mock SIEM deployment on PR merge
 
 ---
@@ -343,11 +384,13 @@ We've successfully built and demonstrated a **production-ready automated detecti
 4. **Deployment automation:** Mock SIEM deployment with verification
 5. **Audit trail:** UIDs, metadata, deployment records
 6. **TTP validation:** Foundation to ensure test realism (in progress)
+7. **End-to-end testing:** Single command to test entire pipeline
 
 **Current Status:**
 - ✅ 3 production rules deployed
 - ✅ Full workflow operational
 - ✅ TTP validator foundation complete
+- ✅ End-to-end test orchestration workflow complete
 - ⏭️ Ready for TTP validator integration and quality improvements
 
 **Ready for:** Real SIEM deployment after TTP validation and precision tuning
@@ -355,5 +398,5 @@ We've successfully built and demonstrated a **production-ready automated detecti
 ---
 
 **Total Session Time:** Extended session with comprehensive implementation
-**Final Commit:** 6e51625 (TTP intent validator foundation)
+**Final Commit:** ec63a37 (End-to-end test orchestration workflow)
 **Repository:** https://github.com/dc401/adk-tide-generator
