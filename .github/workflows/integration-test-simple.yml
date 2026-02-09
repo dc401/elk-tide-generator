@@ -60,45 +60,21 @@ jobs:
 
           ls -lh generated/detection_rules/
 
-      - name: Install Elasticsearch
-        timeout-minutes: 3
-        run: |
-          echo "Installing Elasticsearch..."
-
-          # Add Elastic GPG key and repo
-          wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main" | sudo tee /etc/apt/sources.list.d/elastic-8.x.list
-
-          # Install
-          sudo apt-get update
-          sudo apt-get install -y elasticsearch
-
-          echo "✓ Elasticsearch installed"
-
-      - name: Configure and Start Elasticsearch
+      - name: Start Elasticsearch (Docker)
         timeout-minutes: 2
         run: |
-          echo "Configuring Elasticsearch..."
+          echo "Starting Elasticsearch in Docker..."
 
-          # Disable security for testing
-          echo "xpack.security.enabled: false" | sudo tee -a /etc/elasticsearch/elasticsearch.yml
-          echo "xpack.security.enrollment.enabled: false" | sudo tee -a /etc/elasticsearch/elasticsearch.yml
+          # Start Elasticsearch container
+          docker run -d \
+            --name elasticsearch \
+            -p 9200:9200 \
+            -e "discovery.type=single-node" \
+            -e "xpack.security.enabled=false" \
+            -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+            docker.elastic.co/elasticsearch/elasticsearch:8.12.0
 
-          # Set memory limits for GitHub runner
-          echo "-Xms512m" | sudo tee -a /etc/elasticsearch/jvm.options.d/heap.options
-          echo "-Xmx512m" | sudo tee -a /etc/elasticsearch/jvm.options.d/heap.options
-
-          # Start service
-          sudo systemctl start elasticsearch
-
-          # Check if it started (don't fail immediately)
-          if ! sudo systemctl is-active --quiet elasticsearch; then
-            echo "⚠️  Elasticsearch failed to start, checking logs..."
-            sudo journalctl -xeu elasticsearch.service --no-pager | tail -50
-            exit 1
-          fi
-
-          echo "✓ Elasticsearch configured and started"
+          echo "✓ Elasticsearch container started"
 
       - name: Wait for Elasticsearch Ready
         timeout-minutes: 2
