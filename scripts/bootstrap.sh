@@ -551,9 +551,7 @@ Setup:
 - GCP project: $PROJECT_ID
 - GitHub repo: $REPO (private)
 - Secrets configured in GitHub Actions
-- No service account keys committed
-
-Co-Authored-By: Bootstrap Script <noreply@bootstrap.sh>" || echo "  (no changes to commit)"
+- No service account keys committed" || echo "  (no changes to commit)"
 
     #push to GitHub (handle conflicts)
     echo "  Pushing to GitHub..."

@@ -320,6 +320,10 @@ def stage_rules_and_create_pr():
     branch_name = f"detection-review-{timestamp}"
 
     try:
+        #configure git identity (required for GitHub Actions)
+        subprocess.run(['git', 'config', 'user.name', 'Detection Pipeline Bot'], check=True)
+        subprocess.run(['git', 'config', 'user.email', 'bot@detections.example.com'], check=True)
+
         subprocess.run(['git', 'checkout', '-b', branch_name], check=True)
         subprocess.run(['git', 'add', 'staged_rules/', 'pr_description.md'], check=True)
 
@@ -335,9 +339,7 @@ Highlights:
 - Windows rules now detecting (index mapping fix)
 - Dynamic prompt works for any CTI source
 
-Review: See pr_description.md for detailed analysis
-
-Co-Authored-By: Claude <noreply@anthropic.com>"""
+Review: See pr_description.md for detailed analysis"""
 
         subprocess.run(['git', 'commit', '-m', commit_msg], check=True)
         subprocess.run(['git', 'push', '-u', 'origin', branch_name], check=True)
