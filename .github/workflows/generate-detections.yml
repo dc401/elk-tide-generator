@@ -103,14 +103,14 @@ jobs:
           done
 
       - name: Generate Detection Rules
-        timeout-minutes: 3
+        timeout-minutes: 10
         env:
           GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
           GOOGLE_CLOUD_LOCATION: ${{ secrets.GOOGLE_CLOUD_LOCATION }}
           GOOGLE_GENAI_USE_VERTEXAI: 'true'
         run: |
           echo "Starting Elasticsearch detection rule generation from CTI sources..."
-          echo "Timeout: 3 minutes (fail fast)"
+          echo "Timeout: 10 minutes (includes iterative validation)"
 
           set -e  # Exit immediately on any error
           python run_agent.py \
