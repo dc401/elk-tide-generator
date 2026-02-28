@@ -18,7 +18,7 @@ docstring_parser==0.17.0
 elastic-transport==8.17.1
 elasticsearch==8.19.3
 fastapi==0.123.10
-google-adk==1.23.0
+#google-adk==1.23.0
 google-api-core==2.29.0
 google-api-python-client==2.189.0
 google-auth==2.47.0
